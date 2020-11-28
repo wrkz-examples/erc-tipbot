@@ -1,0 +1,1292 @@
+import discord
+from discord.ext import commands
+from discord.ext.commands import Bot, AutoShardedBot, when_mentioned_or, CheckFailure
+from discord.utils import get
+
+import os
+import time, timeago
+from datetime import datetime
+from config import config
+import click
+import sys, traceback
+import asyncio, aiohttp
+
+import re
+import math, random
+
+import store
+from typing import List, Dict
+
+# for randomString
+import random, string
+
+# Eth wallet py
+import functools
+from pywallet import wallet as ethwallet
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+TX_IN_PROCESS = []
+TOKEN_NAME = config.moon.ticker.upper()
+
+EMOJI_ERROR = "\u274C"
+EMOJI_OK_BOX = "\U0001F197"
+EMOJI_RED_NO = "\u26D4"
+EMOJI_OK_HAND = "\U0001F44C"
+EMOJI_MONEYBAG = "\U0001F4B0"
+EMOJI_QUESTEXCLAIM = "\u2049"
+EMOJI_ARROW_RIGHTHOOK = "\u21AA"
+EMOJI_ZIPPED_MOUTH = "\U0001F910"
+EMOJI_MONEYFACE = "\U0001F911"
+EMOJI_BELL_SLASH = "\U0001F515"
+EMOJI_BELL = "\U0001F514"
+EMOJI_HOURGLASS_NOT_DONE = "\u23F3"
+EMOJI_PARTY = "\U0001F389"
+
+NOTIFICATION_OFF_CMD = 'Type: `.notifytip off` to turn off this DM notification.'
+
+bot_help_about = "About MoonTipBot."
+bot_help_invite = "Invite link of bot to your server."
+bot_help_balance = "Check your tipbot balance."
+bot_help_deposit = "Get your wallet ticker's deposit address."
+bot_help_register = "Register or change your deposit address for MoonTipBot."
+bot_help_withdraw = "Withdraw coin from your MoonTipBot balance."
+
+bot_help_admin_shutdown = "Restart bot."
+bot_help_admin_maintenance = "Bot to be in maintenance mode ON / OFF"
+
+intents = discord.Intents.default()
+intents.members = True
+intents.presences = True
+
+
+# Steal from https://github.com/cree-py/RemixBot/blob/master/bot.py#L49
+async def get_prefix(bot, message):
+    """Gets the prefix for the guild"""
+    pre_cmd = config.discord.prefixCmd
+    if isinstance(message.channel, discord.DMChannel):
+        pre_cmd = config.discord.prefixCmd
+        extras = [pre_cmd, 'm.', 'moon!', '.']
+        return when_mentioned_or(*extras)(bot, message)
+
+    extras = [pre_cmd, 'm.', 'moon!', '.']
+    return when_mentioned_or(*extras)(bot, message)
+
+bot = AutoShardedBot(command_prefix=get_prefix, owner_id = config.discord.ownerID, case_insensitive=True, intents=intents)
+
+# Create ETH
+def create_eth_wallet():
+    seed = ethwallet.generate_mnemonic()
+    w = ethwallet.create_wallet(network="ETH", seed=seed, children=1)
+    return w
+
+async def create_address_eth():
+    wallet_eth = functools.partial(create_eth_wallet)
+    create_wallet = await bot.loop.run_in_executor(None, wallet_eth)
+    return create_wallet
+
+
+@bot.event
+async def on_shard_ready(shard_id):
+    print(f'Shard {shard_id} connected')
+
+@bot.event
+async def on_ready():
+    print('Logged in as')
+    print(bot.user.name)
+    print(bot.user.id)
+    print('------')
+    game = discord.Game(name="m.")
+    await bot.change_presence(status=discord.Status.online, activity=game)
+
+
+@bot.event
+async def on_message(message):
+    # Do not remove this, otherwise, command not working.
+    ctx = await bot.get_context(message)
+    await bot.invoke(ctx)
+
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    # If bot re-act, ignore.
+    if user.id == bot.user.id:
+        return
+    # If other people beside bot react.
+    else:
+        # If re-action is OK box and message author is bot itself
+        if reaction.emoji == EMOJI_OK_BOX and reaction.message.author.id == bot.user.id:
+            await reaction.message.delete()
+
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    if payload.guild_id is None:
+        return  # Reaction is on a private message
+    """Handle a reaction add."""
+    try:
+        emoji_partial = str(payload.emoji)
+        message_id = payload.message_id
+        channel_id = payload.channel_id
+        user_id = payload.user_id
+        guild = bot.get_guild(payload.guild_id)
+        channel = bot.get_channel(id=channel_id)
+        if not channel:
+            return
+        if isinstance(channel, discord.DMChannel):
+            return
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        return
+    message = None
+    author = None
+    if message_id:
+        try:
+            message = await channel.fetch_message(message_id)
+            author = message.author
+        except (discord.errors.NotFound, discord.errors.Forbidden) as e:
+            # No message found
+            return
+        member = bot.get_user(id=user_id)
+        if emoji_partial in [EMOJI_OK_BOX] and message.author.id == bot.user.id \
+            and author != member and message:
+            # Delete message
+            try:
+                await message.delete()
+                return
+            except discord.errors.NotFound as e:
+                # No message found
+                return
+
+
+
+@bot.command(pass_context=True, name='about', help=bot_help_about)
+async def about(ctx):
+    invite_link = "https://discordapp.com/oauth2/authorize?client_id="+str(bot.user.id)+"&scope=bot"
+    botdetails = discord.Embed(title='About Me', description='Basic ERC Tipping Bot', timestamp=datetime.utcnow(), colour=7047495)
+    botdetails.add_field(name='Invite Me:', value=f'[Invite TipBot]({invite_link})', inline=True)
+    botdetails.add_field(name='Servers I am in:', value=len(bot.guilds), inline=True)
+    botdetails.set_footer(text='Made in Python3.8 with discord.py library!', icon_url='http://findicons.com/files/icons/2804/plex/512/python.png')
+    botdetails.set_author(name=bot.user.name, icon_url=bot.user.avatar_url)
+    try:
+        await ctx.send(embed=botdetails)
+    except Exception as e:
+        await ctx.send(embed=botdetails)
+        traceback.print_exc(file=sys.stdout)
+
+
+@bot.command(pass_context=True, name='invite', aliases=['inviteme'], help=bot_help_invite)
+async def invite(ctx):
+    invite_link = "https://discordapp.com/oauth2/authorize?client_id="+str(bot.user.id)+"&scope=bot"
+    await ctx.send('**[INVITE LINK]**\n'
+                f'{invite_link}')
+
+
+@bot.command(pass_context=True, help="Toggle notify tip notification from bot ON|OFF")
+async def notifytip(ctx, onoff: str):
+    if onoff.upper() not in ["ON", "OFF"]:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{ctx.author.mention} You need to use only `ON` or `OFF`.')
+        return
+
+    onoff = onoff.upper()
+    notifyList = await store.sql_get_tipnotify()
+    if onoff == "ON":
+        if str(ctx.message.author.id) in notifyList:
+            await store.sql_toggle_tipnotify(str(ctx.message.author.id), "ON")
+            await ctx.send(f'{ctx.author.mention} OK, you will get all notification when tip.')
+            await ctx.message.add_reaction(EMOJI_BELL)
+            return
+        else:
+            await ctx.send(f'{ctx.author.mention} You already have notification ON by default.')
+            await ctx.message.add_reaction(EMOJI_BELL)
+            return
+    elif onoff == "OFF":
+        if str(ctx.message.author.id) in notifyList:
+            await ctx.send(f'{ctx.author.mention} You already have notification OFF.')
+            await ctx.message.add_reaction(EMOJI_BELL_SLASH)
+            return
+        else:
+            await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
+            await ctx.send(f'{ctx.author.mention} OK, you will not get any notification when anyone tips.')
+            await ctx.message.add_reaction(EMOJI_BELL_SLASH)
+            return
+
+
+@bot.command(pass_context=True, help="Spread free tip by user re-acted")
+async def freetip(ctx, amount: str, duration: str, comment: str=None):
+    return
+    # TODO
+    global TX_IN_PROCESS
+    # Check if tx in progress
+    if ctx.message.author.id in TX_IN_PROCESS:
+        await ctx.message.add_reaction(EMOJI_HOURGLASS_NOT_DONE)
+        msg = await ctx.send(f'{EMOJI_ERROR} {ctx.author.mention} You have another tx in progress.')
+        await msg.add_reaction(EMOJI_OK_BOX)
+        return
+
+    def hms_to_seconds(t):
+        durtion_in_second = 0
+        try:
+            t = t.replace("minutes", "mn")
+            t = t.replace("mns", "mn")
+            t = t.replace("mins", "mn")
+            t = t.replace("min", "mn")
+            t = t.replace("m", "mn")
+            mult = {'mn': 60, 's': 1}
+            durtion_in_second = sum(int(num) * mult.get(val, 1) for num, val in re.findall('(\d+)(\w+)', t))
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
+        return durtion_in_second
+
+
+    amount = amount.replace(",", "")
+    try:
+        amount = float(amount)
+    except ValueError:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid amount.')
+        return
+
+    try:
+        duration_s = hms_to_seconds(duration)
+        if duration_s == 0:
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid time given. Please use time format: mn or s')
+            return
+        elif duration_s < 30 or duration_s > 300:
+            # TODO: via config
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid duration. Please use between 30s to 5mn.')
+            return
+    except Exception as e:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid duration.')
+        return
+
+    try:
+        amount = float(amount)
+    except ValueError:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid amount.')
+        return
+
+    if isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send(f'{EMOJI_RED_NO} This command can not be in private.')
+        return
+
+    notifyList = await store.sql_get_tipnotify()
+    token_info = await store.get_token_info(TOKEN_NAME)
+    MinTx = float(token_info['real_min_tip'])
+    MaxTX = float(token_info['real_max_tip'])
+
+    user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    if user_from is None:
+        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+    userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
+    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+
+    if amount > MaxTX:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
+                       f'{num_format_coin(MaxTX)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount < MinTx:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
+                       f'{num_format_coin(MinTx)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > actual_balance:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to do a free tip of '
+                       f'{num_format_coin(amount)} '
+                       f'{TOKEN_NAME}.')
+        return
+    try:
+        attend_list_id = []
+        attend_list_names = []
+        embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", color=0x00ff00)
+        msg = await ctx.send(embed=embed)
+        await msg.add_reaction(EMOJI_PARTY)
+        if comment and len(TOKEN_NAME) > 0:
+            embed.add_field(name="Comment", value=comment, inline=False)
+        embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, timeout: {seconds_str(duration_s)}")
+        await msg.edit(embed=embed)
+    except (discord.errors.NotFound, discord.errors.Forbidden) as e:
+        await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
+        return
+
+    def check(reaction, user):
+        return user != ctx.message.author and user.bot == False and reaction.message.author == bot.user and reaction.message.id == msg.id and str(reaction.emoji) == EMOJI_PARTY
+    try:
+        reaction, user = await bot.wait_for('reaction_add', timeout=int(duration_s), check=check)
+    except asyncio.TimeoutError:
+        embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Already expired", color=0x00ff00)
+        if comment and len(TOKEN_NAME) > 0:
+            embed.add_field(name="Comment", value=comment, inline=False)
+        embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
+        await msg.edit(embed=embed)
+        await msg.add_reaction(EMOJI_OK_BOX)
+        return
+    if str(reaction.emoji) == EMOJI_PARTY:
+        if ctx.author.id not in attend_list_id:
+            attend_list_id.append(user.id)
+            attend_list_names.append('{}#{}'.format(user.name, user.discriminator))
+            embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", color=0x00ff00)
+            if comment and len(TOKEN_NAME) > 0:
+                embed.add_field(name="Comment", value=comment, inline=False)
+            embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
+            embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, timeout: {seconds_str(duration_s)}")
+            await msg.edit(embed=embed)
+        # TODO, add one by one
+        # re-check balance
+        userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
+
+        if amount > actual_balance:
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to do a free tip of '
+                           f'{num_format_coin(amount)} '
+                           f'{TOKEN_NAME}.')
+            return
+        # end of re-check balance
+
+        # add queue also freetip
+        if ctx.message.author.id not in TX_IN_PROCESS:
+            TX_IN_PROCESS.append(ctx.message.author.id)
+        else:
+            await ctx.message.add_reaction(EMOJI_HOURGLASS_NOT_DONE)
+            msg = await ctx.send(f'{EMOJI_ERROR} {ctx.author.mention} You have another tx in progress.')
+            await msg.add_reaction(EMOJI_OK_BOX)
+            return
+
+        tip = None
+        user_to = await store.sql_get_userwallet(str(user.id), TOKEN_NAME)
+        if user_to is None:
+            userregister = await store.sql_register_user(str(user.id), TOKEN_NAME, 'DISCORD')
+            user_to = await store.sql_get_userwallet(str(user.id), TOKEN_NAME)
+        if coin_family in ["TRTL", "BCN"]:
+            tip = await store.sql_send_tip(str(ctx.message.author.id), str(user.id), amount, 'FREETIP', TOKEN_NAME)
+        elif coin_family == "XMR":
+            tip = await store.sql_mv_xmr_single(str(ctx.message.author.id), str(user.id), amount, TOKEN_NAME, "FREETIP")
+        elif coin_family == "NANO":
+            tip = await store.sql_mv_nano_single(str(ctx.message.author.id), str(user.id), amount, TOKEN_NAME, "FREETIP")
+        elif coin_family == "DOGE":
+            tip = await store.sql_mv_doge_single(str(ctx.message.author.id), str(user.id), amount, TOKEN_NAME, "FREETIP")
+
+        # remove queue from freetip
+        if ctx.message.author.id in TX_IN_PROCESS:
+            TX_IN_PROCESS.remove(ctx.message.author.id)
+
+        if tip:
+            embed = discord.Embed(title=f"Free Tip appeared {num_format_coin(amount)}{TOKEN_NAME}", description=f"Already collected", color=0x00ff00)
+            embed.add_field(name="Message ID", value=msg.id, inline=True)
+            embed.add_field(name="Guild ID", value=msg.guild.id, inline=True)
+            embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, collected by: {user.name}#{user.discriminator}")
+            await msg.edit(embed=embed)
+            # tipper shall always get DM. Ignore notifyList
+            try:
+                await ctx.message.author.send(
+                    f'{EMOJI_ARROW_RIGHTHOOK} Tip of {num_format_coin(amount)} '
+                    f'{TOKEN_NAME} '
+                    f'has been collected by {user.name}#{user.discriminator} in server `{ctx.guild.name}`')
+            except (discord.Forbidden, discord.errors.Forbidden) as e:
+                await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
+            if str(user.id) not in notifyList:
+                try:
+                    await user.send(
+                        f'{EMOJI_MONEYFACE} You had collected a tip of {num_format_coin(amount)} '
+                        f'{TOKEN_NAME} from {ctx.message.author.name}#{ctx.message.author.discriminator} in server `{ctx.guild.name}`\n'
+                        f'{NOTIFICATION_OFF_CMD}')
+                except (discord.Forbidden, discord.errors.Forbidden) as e:
+                    await store.sql_toggle_tipnotify(str(user.id), "OFF")
+            await msg.add_reaction(EMOJI_OK_BOX)
+            return
+
+
+@bot.command(pass_context=True, help='Tip other people')
+async def tip(ctx, amount: str, *args):
+    global TX_IN_PROCESS
+    amount = amount.replace(",", "")
+    token_info = await store.get_token_info(TOKEN_NAME)
+    try:
+        amount = float(amount)
+    except ValueError:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid amount.')
+        return
+
+    if isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send(f'{EMOJI_RED_NO} This command can not be in private.')
+        return
+
+    if len(ctx.message.mentions) == 1 and (bot.user in ctx.message.mentions):
+        # Tip to TipBot
+        member = ctx.message.mentions[0]
+        print('TipBot is receiving tip from {} amount: {}{}'.format(ctx.message.author.name, amount, TOKEN_NAME))
+    elif len(ctx.message.mentions) == 1 and (bot.user not in ctx.message.mentions):
+        member = ctx.message.mentions[0]
+        if ctx.message.author.id == member.id:
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Tip me if you want.')
+            return
+        pass
+    elif len(ctx.message.mentions) > 1:
+        await _tip(ctx, amount, TOKEN_NAME)
+        return
+
+    MinTx = token_info['real_min_tip']
+    MaxTX = token_info['real_max_tip']
+    user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    if user_from is None:
+        w = await create_address_eth()
+        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
+        user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
+    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    if amount < MinTx:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
+                       f'{num_format_coin(MinTx)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > MaxTX:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
+                       f'{num_format_coin(MaxTX)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > actual_balance:
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send tip of '
+                            f'{num_format_coin(amount)} '
+                            f'{TOKEN_NAME} to {member.name}#{member.discriminator}.')
+            return
+    if ctx.message.author.id not in TX_IN_PROCESS:
+        TX_IN_PROCESS.append(ctx.message.author.id)
+        try:
+            tip = await store.sql_mv_erc_single(str(ctx.message.author.id), str(member.id), amount, TOKEN_NAME, "TIP", token_info['contract'])
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
+        TX_IN_PROCESS.remove(ctx.message.author.id)
+    else:
+        # reject and tell to wait
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You have another tx in process. Please wait it to finish. ')
+        await msg.add_reaction(EMOJI_OK_BOX)
+        return
+    
+    notifyList = await store.sql_get_tipnotify()
+    if tip:
+        try:
+            await ctx.message.author.send(
+                f'{EMOJI_ARROW_RIGHTHOOK} Tip of {num_format_coin(amount)} '
+                f'{TOKEN_NAME} '
+                f'was sent to {member.name}#{member.discriminator} in server `{ctx.guild.name}`\n')
+        except (discord.Forbidden, discord.errors.Forbidden) as e:
+            await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
+        try:
+            await ctx.send(
+                f'{EMOJI_MONEYFACE} {member.mention} got a tip of {num_format_coin(amount)} '
+                f'{TOKEN_NAME} from {ctx.message.author.name}#{ctx.message.author.discriminator}')
+        except (discord.Forbidden, discord.errors.Forbidden) as e:
+            if bot.user.id != member.id and str(member.id) not in notifyList:
+                try:
+                    await member.send(f'{EMOJI_MONEYFACE} You got a tip of {num_format_coin(amount)} '
+                                      f'{TOKEN_NAME} from {ctx.message.author.name}#{ctx.message.author.discriminator} in server `{ctx.guild.name}`\n'
+                                      f'{NOTIFICATION_OFF_CMD}')
+                except (discord.Forbidden, discord.errors.Forbidden) as e:
+                    await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
+                    await store.sql_toggle_tipnotify(str(member.id), "OFF")
+        await ctx.message.add_reaction(EMOJI_OK_HAND)
+        return
+    else:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+    return
+
+
+@bot.command(pass_context=True, name='gtip', aliases=['guildtip', 'mtip'], help='Tip other people from guild balance')
+@commands.has_permissions(manage_channels=True)
+async def gtip(ctx, amount: str, *args):
+    global TX_IN_PROCESS
+    amount = amount.replace(",", "")
+    token_info = await store.get_token_info(TOKEN_NAME)
+    try:
+        amount = float(amount)
+    except ValueError:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid amount.')
+        return
+
+    if isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send(f'{EMOJI_RED_NO} This command can not be in private.')
+        return
+
+    if len(ctx.message.mentions) == 1 and (bot.user in ctx.message.mentions):
+        # Tip to TipBot
+        member = ctx.message.mentions[0]
+        print('TipBot is receiving tip from {} amount: {}{}'.format(ctx.message.author.name, amount, TOKEN_NAME))
+    elif len(ctx.message.mentions) == 1 and (bot.user not in ctx.message.mentions):
+        member = ctx.message.mentions[0]
+        if ctx.message.author.id == member.id:
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Tip me if you want.')
+            return
+        pass
+    elif len(ctx.message.mentions) > 1:
+        await _tip(ctx, amount, TOKEN_NAME)
+        return
+
+    MinTx = token_info['real_min_tip']
+    MaxTX = token_info['real_max_tip']
+    user_from = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME)
+    if user_from is None:
+        w = await create_address_eth()
+        user_from = await store.sql_register_user(str(ctx.guild.id), TOKEN_NAME, w, 'DISCORD')
+        user_from = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME)
+    userdata_balance = await store.sql_user_balance(str(ctx.guild.id), TOKEN_NAME)
+    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    if amount < MinTx:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
+                       f'{num_format_coin(MinTx)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > MaxTX:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
+                       f'{num_format_coin(MaxTX)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > actual_balance:
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient guild balance to send tip of '
+                            f'{num_format_coin(amount)} '
+                            f'{TOKEN_NAME} to {member.name}#{member.discriminator}.')
+            return
+    if ctx.guild.id not in TX_IN_PROCESS:
+        TX_IN_PROCESS.append(ctx.guild.id)
+        try:
+            tip = await store.sql_mv_erc_single(str(ctx.guild.id), str(member.id), amount, TOKEN_NAME, "TIP", token_info['contract'])
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
+        TX_IN_PROCESS.remove(ctx.guild.id)
+    else:
+        # reject and tell to wait
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Your guild has another tx in process. Please wait it to finish. ')
+        await msg.add_reaction(EMOJI_OK_BOX)
+        return
+    
+    notifyList = await store.sql_get_tipnotify()
+
+    if tip:
+        try:
+            await ctx.message.author.send(
+                f'{EMOJI_ARROW_RIGHTHOOK} Guild Tip of {num_format_coin(amount)} '
+                f'{TOKEN_NAME} '
+                f'was sent to {member.name}#{member.discriminator} in server `{ctx.guild.name}`\n')
+        except (discord.Forbidden, discord.errors.Forbidden) as e:
+            await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
+        try:
+            await ctx.send(
+                f'{EMOJI_MONEYFACE} {member.mention} got a guild tip of {num_format_coin(amount)} '
+                f'{TOKEN_NAME} from {ctx.message.author.name}#{ctx.message.author.discriminator}')
+        except (discord.Forbidden, discord.errors.Forbidden) as e:
+            if bot.user.id != member.id and str(member.id) not in notifyList:
+                try:
+                    await member.send(f'{EMOJI_MONEYFACE} You got a guild tip of {num_format_coin(amount)} '
+                                      f'{TOKEN_NAME} from {ctx.message.author.name}#{ctx.message.author.discriminator} in server `{ctx.guild.name}`\n'
+                                      f'{NOTIFICATION_OFF_CMD}')
+                except (discord.Forbidden, discord.errors.Forbidden) as e:
+                    await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
+                    await store.sql_toggle_tipnotify(str(member.id), "OFF")
+        await ctx.message.add_reaction(EMOJI_OK_HAND)
+        return
+    else:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+    return
+
+@bot.command(pass_context=True, help='Tip all online user')
+async def tipall(ctx, amount: str, user: str='ONLINE'):
+    global TX_IN_PROCESS
+    token_info = await store.get_token_info(TOKEN_NAME)
+    MinTx = token_info['real_min_tip']
+    MaxTX = token_info['real_max_tip']
+
+    if isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send(f'{EMOJI_RED_NO} This command can not be in private.')
+        return
+
+    amount = amount.replace(",", "")
+    try:
+        amount = float(amount)
+    except ValueError:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid amount.')
+        return
+
+    user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    if user_from is None:
+        w = await create_address_eth()
+        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
+        user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
+    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    if amount < MinTx:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
+                       f'{num_format_coin(MinTx)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > MaxTX:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
+                       f'{num_format_coin(MaxTX)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > actual_balance:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send tip of '
+                       f'{num_format_coin(amount)} '
+                       f'{TOKEN_NAME}.')
+        return
+
+    listMembers = [member for member in ctx.guild.members if member.status != discord.Status.offline and member.bot == False]
+    if user.upper() == "ANY":
+        listMembers = [member for member in ctx.guild.members]
+    if len(listMembers) <= 1:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} There is no number of users.')
+        return
+
+    notifyList = await store.sql_get_tipnotify()
+    print("Number of tip-all in {}: {}".format(ctx.guild.name, len(listMembers)))
+    memids = []  # list of member ID
+    for member in listMembers:
+        # print(member.name) # you'll just print out Member objects your way.
+        if ctx.message.author.id != member.id:
+            memids.append(str(member.id))
+    amountDiv = round(amount / len(memids), 4)
+    if (amount / len(memids)) < MinTx:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
+                       f'{num_format_coin(MinTx)} '
+                       f'{TOKEN_NAME} for each member. You need at least {num_format_coin(len(memids) * MinTx)}{TOKEN_NAME}.')
+        return
+    if ctx.message.author.id not in TX_IN_PROCESS:
+        TX_IN_PROCESS.append(ctx.message.author.id)
+        try:
+            tips = await store.sql_mv_erc_multiple(str(ctx.message.author.id), memids, amountDiv, TOKEN_NAME, "TIPALL", token_info['contract'])
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
+        TX_IN_PROCESS.remove(ctx.message.author.id)
+    else:
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You have another tx in process. Please wait it to finish. ')
+        await msg.add_reaction(EMOJI_OK_BOX)
+        return
+    if tips:
+        tipAmount = num_format_coin(amount)
+        ActualSpend_str = num_format_coin(amountDiv * len(memids))
+        amountDiv_str = num_format_coin(amountDiv)
+        numMsg = 0
+        for member in listMembers:
+            # TODO: set limit here 50
+            dm_user = bool(random.getrandbits(1)) if len(listMembers) > 50 else True
+            if ctx.message.author.id != member.id and member.id != bot.user.id and str(member.id) not in notifyList:
+                try:
+                    if dm_user:
+                        try:
+                            await member.send(f'{EMOJI_MONEYFACE} You got a tip of {amountDiv_str} '
+                                              f'{TOKEN_NAME} from {ctx.message.author.name}#{ctx.message.author.discriminator} `{config.discord.prefixCmd}tipall` in server `{ctx.guild.name}`\n'
+                                              f'{NOTIFICATION_OFF_CMD}')
+                            numMsg += 1
+                        except (discord.Forbidden, discord.errors.Forbidden) as e:
+                            await store.sql_toggle_tipnotify(str(member.id), "OFF")
+                except Exception as e:
+                    traceback.print_exc(file=sys.stdout)
+        # tipper shall always get DM. Ignore notifyList
+        try:
+            await ctx.message.author.send(
+                    f'{EMOJI_ARROW_RIGHTHOOK} Tip of {tipAmount} '
+                    f'{TOKEN_NAME} '
+                    f'was sent spread to ({len(memids)}) members in server `{ctx.guild.name}`.\n'
+                    f'Each member got: `{amountDiv_str}{TOKEN_NAME}`\n'
+                    f'Actual spending: `{ActualSpend_str}{TOKEN_NAME}`')
+        except (discord.Forbidden, discord.errors.Forbidden) as e:
+            await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
+        await ctx.message.add_reaction(EMOJI_OK_HAND)
+    else:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+    return
+
+
+
+@bot.command(pass_context=True, name='balance', aliases=['bal'], help=bot_help_balance)
+async def balance(ctx):
+    global TX_IN_PROCESS
+    wallet = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+    if wallet is None:
+        w = await create_address_eth()
+        userregister = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
+        wallet = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+    if wallet:
+        embed = discord.Embed(title=f'Balance for {ctx.message.author.name}#{ctx.message.author.discriminator}', description='`You need <Spendable> for withdraw/tip.`', timestamp=datetime.utcnow(), colour=7047495)
+        embed.set_author(name=ctx.message.author.name, icon_url=ctx.message.author.avatar_url)
+        deposit_balance = await store.http_wallet_getbalance(wallet['balance_wallet_address'], TOKEN_NAME)
+        
+        token_info = await store.get_token_info(TOKEN_NAME)
+        real_deposit_balance = deposit_balance / 10**token_info['token_decimal']
+    
+        embed.add_field(name="Deposited", value="`{}{}`".format(num_format_coin(real_deposit_balance), TOKEN_NAME), inline=True)
+        try:
+            note = ''
+            if ctx.message.author.id in TX_IN_PROCESS:
+                note = '*You have some a tx in progress. Balance is being updated.*'
+            userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+            balance_actual = num_format_coin(float(wallet['real_actual_balance']) + float(userdata_balance['Adjust']))
+            embed.add_field(name="Spendable", value="`{}{}`".format(balance_actual, TOKEN_NAME), inline=True)
+            total_balance = real_deposit_balance + float(wallet['real_actual_balance']) + float(userdata_balance['Adjust'])
+            embed.add_field(name="Total", value="`{}{}`".format(num_format_coin(total_balance), TOKEN_NAME), inline=False)
+            embed.set_footer(text=f"Minimum {str(config.moon.min_move_deposit)}{config.moon.ticker} in deposit is required to (auto)transfer to **Spendable**.")
+            await ctx.message.add_reaction(EMOJI_OK_HAND)
+            msg = await ctx.send(embed=embed)
+            await msg.add_reaction(EMOJI_OK_BOX)
+            return
+        except Exception as e:
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            traceback.print_exc(file=sys.stdout)
+    return
+
+
+@bot.command(pass_context=True, aliases=['botbal'], help='Get bot\'s balance')
+async def botbalance(ctx, member: discord.Member):
+    if isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} This command can not be in DM.')
+        return
+    if member.bot == False:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Command is only for bot!!')
+        return
+
+    wallet = await store.sql_get_userwallet(str(member.id), TOKEN_NAME, 'DISCORD')
+    if wallet is None:
+        w = await create_address_eth()
+        userregister = await store.sql_register_user(str(member.id), TOKEN_NAME, w, 'DISCORD')
+        wallet = await store.sql_get_userwallet(str(member.id), TOKEN_NAME, 'DISCORD')
+
+    if wallet:
+        embed = discord.Embed(title=f'Bot balance for {member.name}#{member.discriminator}', description='`This is bot\'s tipjar address. Do not deposit here unless you want to deposit to this bot`', timestamp=datetime.utcnow(), colour=7047495)
+        embed.add_field(name="Bot Deposit Address", value="`{}`".format(wallet['balance_wallet_address']), inline=False)
+        embed.set_author(name=member.name, icon_url=member.avatar_url)
+        deposit_balance = await store.http_wallet_getbalance(wallet['balance_wallet_address'], TOKEN_NAME)
+        
+        token_info = await store.get_token_info(TOKEN_NAME)
+        real_deposit_balance = deposit_balance / 10**token_info['token_decimal']
+    
+        embed.add_field(name="Deposited", value="`{}{}`".format(num_format_coin(real_deposit_balance), TOKEN_NAME), inline=True)
+        try:
+            note = ''
+            if ctx.guild.id in TX_IN_PROCESS:
+                note = '*There are some a tx in progress. Balance is being updated.*'
+            userdata_balance = await store.sql_user_balance(str(member.id), TOKEN_NAME, 'DISCORD')
+            balance_actual = num_format_coin(float(wallet['real_actual_balance']) + float(userdata_balance['Adjust']))
+            embed.add_field(name="Spendable", value="`{}{}`".format(balance_actual, TOKEN_NAME), inline=True)
+            total_balance = real_deposit_balance + float(wallet['real_actual_balance']) + float(userdata_balance['Adjust'])
+            embed.add_field(name="Total", value="`{}{}`".format(num_format_coin(total_balance), TOKEN_NAME), inline=False)
+            embed.set_footer(text=f"Minimum {str(config.moon.min_move_deposit)}{config.moon.ticker} in deposit is required to (auto)transfer to **Spendable**.")
+            await ctx.message.add_reaction(EMOJI_OK_HAND)
+            msg = await ctx.send(embed=embed)
+            await msg.add_reaction(EMOJI_OK_BOX)
+            return
+        except Exception as e:
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            traceback.print_exc(file=sys.stdout)
+    else:
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
+        await ctx.message.add_reaction(EMOJI_ERROR)
+    return
+
+
+@bot.command(pass_context=True, name='mbalance', aliases=['mbal'], help='Balance and deposit to guild')
+async def mbalance(ctx):
+    if isinstance(ctx.channel, discord.DMChannel) == True:
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} This command can not be in DM.')
+        return
+
+    wallet = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME, 'DISCORD')
+    if wallet is None:
+        w = await create_address_eth()
+        userregister = await store.sql_register_user(str(ctx.guild.id), TOKEN_NAME, w, 'DISCORD')
+        wallet = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME, 'DISCORD')
+    embed = discord.Embed(title=f'Deposit for Guild {ctx.guild.name} / {ctx.guild.id}', description='`This is guild\'s tipjar address. Do not deposit here unless you want to deposit to this guild`', timestamp=datetime.utcnow(), colour=7047495)
+
+    if wallet:
+        embed = discord.Embed(title=f'Guild balance for {ctx.guild.name} / {str(ctx.guild.id)}', description='`Guild balance`', timestamp=datetime.utcnow(), colour=7047495)
+        embed.add_field(name="Guild Deposit Address", value="`{}`".format(wallet['balance_wallet_address']), inline=False)
+        embed.set_author(name=ctx.message.author.name, icon_url=ctx.message.author.avatar_url)
+        deposit_balance = await store.http_wallet_getbalance(wallet['balance_wallet_address'], TOKEN_NAME)
+        
+        token_info = await store.get_token_info(TOKEN_NAME)
+        real_deposit_balance = deposit_balance / 10**token_info['token_decimal']
+    
+        embed.add_field(name="Deposited", value="`{}{}`".format(num_format_coin(real_deposit_balance), TOKEN_NAME), inline=True)
+        try:
+            note = ''
+            if ctx.guild.id in TX_IN_PROCESS:
+                note = '*There are some a tx in progress. Balance is being updated.*'
+            userdata_balance = await store.sql_user_balance(str(ctx.guild.id), TOKEN_NAME, 'DISCORD')
+            balance_actual = num_format_coin(float(wallet['real_actual_balance']) + float(userdata_balance['Adjust']))
+            embed.add_field(name="Spendable", value="`{}{}`".format(balance_actual, TOKEN_NAME), inline=True)
+            total_balance = real_deposit_balance + float(wallet['real_actual_balance']) + float(userdata_balance['Adjust'])
+            embed.add_field(name="Total", value="`{}{}`".format(num_format_coin(total_balance), TOKEN_NAME), inline=False)
+            embed.set_footer(text=f"Minimum {str(config.moon.min_move_deposit)}{config.moon.ticker} in deposit is required to (auto)transfer to **Spendable**.")
+            await ctx.message.add_reaction(EMOJI_OK_HAND)
+            msg = await ctx.send(embed=embed)
+            await msg.add_reaction(EMOJI_OK_BOX)
+            return
+        except Exception as e:
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            traceback.print_exc(file=sys.stdout)
+    return
+
+
+@bot.command(pass_context=True, name='deposit', help=bot_help_deposit)
+async def deposit(ctx):
+    wallet = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+    if wallet is None:
+        w = await create_address_eth()
+        userregister = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
+        wallet = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+    embed = discord.Embed(title=f'Deposit for {ctx.author.name}#{ctx.author.discriminator}', description='This bot\'s still under testing!', timestamp=datetime.utcnow(), colour=7047495)
+    embed.set_author(name=bot.user.name, icon_url=bot.user.avatar_url)
+    if wallet['balance_wallet_address']:
+        await ctx.message.add_reaction(EMOJI_OK_HAND)
+        embed.add_field(name="Deposit Address", value="`{}`".format(wallet['balance_wallet_address']), inline=False)
+        if 'user_wallet_address' in wallet and wallet['user_wallet_address'] and isinstance(ctx.channel, discord.DMChannel) == True:
+            embed.add_field(name="Withdraw Address", value="`{}`".format(wallet['user_wallet_address']), inline=False)
+        elif 'user_wallet_address' in wallet and wallet['user_wallet_address'] and isinstance(ctx.channel, discord.DMChannel) == False:
+            embed.add_field(name="Withdraw Address", value="`(Only in DM)`", inline=False)
+        msg = await ctx.send(embed=embed)
+        await msg.add_reaction(EMOJI_OK_BOX)
+    else:
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
+        await ctx.message.add_reaction(EMOJI_ERROR)
+    return
+
+
+@bot.command(pass_context=True, name='mdeposit', help='Deposit to Guild')
+async def mdeposit(ctx):
+    wallet = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME, 'DISCORD')
+    if wallet is None:
+        w = await create_address_eth()
+        userregister = await store.sql_register_user(str(ctx.guild.id), TOKEN_NAME, w, 'DISCORD')
+        wallet = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME, 'DISCORD')
+    embed = discord.Embed(title=f'Deposit for Guild {ctx.guild.name} / {ctx.guild.id}', description='This bot\'s still under testing!', timestamp=datetime.utcnow(), colour=7047495)
+    embed.set_author(name=bot.user.name, icon_url=bot.user.avatar_url)
+    if wallet['balance_wallet_address']:
+        await ctx.message.add_reaction(EMOJI_OK_HAND)
+        embed.add_field(name="Guild Deposit Address", value="`{}`".format(wallet['balance_wallet_address']), inline=False)
+        msg = await ctx.send(embed=embed)
+        await msg.add_reaction(EMOJI_OK_BOX)
+    else:
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
+        await ctx.message.add_reaction(EMOJI_ERROR)
+    return
+
+
+@bot.command(pass_context=True, name='register', aliases=['reg'], help=bot_help_register)
+async def register(ctx, wallet_address: str):
+    if wallet_address.isalnum() == False:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid address:\n'
+                       f'`{wallet_address}`')
+        return
+
+    user = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    if user is None:
+        w = await create_address_eth()
+        userregister = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
+        user = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+
+    existing_user = user
+    # correct print(valid_address)
+    valid_address = await store.validate_address(wallet_address)
+    valid = False
+    if valid_address and valid_address.upper() == wallet_address.upper():
+        valid = True
+    else:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid address:\n'
+                       f'`{wallet_address}`')
+        return
+
+    # if they want to register with tipjar address
+    try:
+        if user['balance_wallet_address'].upper() == wallet_address.upper():
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You can not register with your tipjar\'s address.\n'
+                           f'`{wallet_address}`')
+            return
+        else:
+            pass
+    except Exception as e:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        print('Error during register user address:' + str(e))
+        return
+
+    # Check if register address in any of user balance address
+    check_in_balance_users = await store.sql_check_balance_address_in_users(wallet_address)
+    if check_in_balance_users:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You can not register with any of user\'s tipjar\'s address.\n'
+                       f'`{wallet_address}`')
+        return
+
+    if 'user_wallet_address' in existing_user and existing_user['user_wallet_address']:
+        prev_address = existing_user['user_wallet_address']
+        if prev_address.upper() != wallet_address.upper():
+            await store.sql_update_user(str(ctx.message.author.id), wallet_address, TOKEN_NAME)
+            await ctx.message.add_reaction(EMOJI_OK_HAND)
+            await ctx.send(f'{ctx.author.mention} Your withdraw address has changed from:\n'
+                           f'`{prev_address}`\n to\n '
+                           f'`{wallet_address}`')
+            return
+        else:
+            await ctx.message.add_reaction(EMOJI_ERROR)
+            await ctx.send(f'{ctx.author.mention} Your previous and new address is the same.')
+            return
+    else:
+        try:
+            await store.sql_update_user(str(ctx.message.author.id), wallet_address, TOKEN_NAME)
+            await ctx.message.add_reaction(EMOJI_OK_HAND)
+            await ctx.send(f'{ctx.author.mention} You have registered a withdraw address.\n'
+                           f'You can use `{config.discord.prefixCmd}withdraw AMOUNT` anytime.')
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
+        return
+
+
+@bot.command(pass_context=True, help=bot_help_withdraw)
+async def withdraw(ctx, amount: str):
+    global TX_IN_PROCESS
+    amount = amount.replace(",", "")
+    try:
+        amount = float(amount)
+    except ValueError:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid given amount for command withdraw.')
+        return
+
+    token_info = await store.get_token_info(TOKEN_NAME)
+    MinTx = float(token_info['real_min_tx'])
+    MaxTX = float(token_info['real_max_tx'])
+
+    user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    if user_from is None:
+        w = await create_address_eth()
+        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
+        user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+
+    CoinAddress = None
+    if 'user_wallet_address' in user_from and user_from['user_wallet_address'] is None:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You do not have a withdrawal address, please use '
+                       f'`{config.discord.prefixCmd}register wallet_address` to register.')
+        return
+    else:
+        CoinAddress = user_from['user_wallet_address']
+
+
+    user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+    userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+
+    # If balance 0, no need to check anything
+    if actual_balance <= 0:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Please check your **{TOKEN_NAME}** balance.')
+        return
+    if amount > actual_balance:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send out '
+                       f'{num_format_coin(amount)} '
+                       f'{TOKEN_NAME}.')
+        return
+
+    NetFee = token_info['real_withdraw_fee']
+    if amount + NetFee > actual_balance:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send out '
+                       f'{num_format_coin(amount)} '
+                       f'{TOKEN_NAME}. You need to leave at least network fee: {num_format_coin(NetFee)}{TOKEN_NAME}')
+        return
+    elif amount < MinTx:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transaction cannot be smaller than '
+                       f'{num_format_coin(MinTx)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > MaxTX:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transaction cannot be bigger than '
+                       f'{num_format_coin(MaxTX)} '
+                       f'{TOKEN_NAME}.')
+        return
+
+    SendTx = None
+    if ctx.message.author.id not in TX_IN_PROCESS:
+        TX_IN_PROCESS.append(ctx.message.author.id)
+        try:
+            SendTx = await store.sql_external_erc_single(str(ctx.author.id), CoinAddress, amount, TOKEN_NAME, 'DISCORD')
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
+        TX_IN_PROCESS.remove(ctx.message.author.id)
+    else:
+        # reject and tell to wait
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You have another tx in process. Please wait it to finish. ')
+        await msg.add_reaction(EMOJI_OK_BOX)
+        return
+    if SendTx:
+        await ctx.message.add_reaction(EMOJI_OK_BOX)
+        await ctx.send(f'{EMOJI_ARROW_RIGHTHOOK} You have withdrawn {num_format_coin(amount)} '
+                       f'{TOKEN_NAME} to `{CoinAddress}`.\n'
+                       f'Transaction hash: `{SendTx}`')
+    else:
+            await ctx.message.add_reaction(EMOJI_ERROR)
+    return
+
+
+# Multiple tip
+async def _tip(ctx, amount, coin: str):
+    TOKEN_NAME = coin.upper()
+    token_info = await store.get_token_info(TOKEN_NAME)
+    MinTx = float(token_info['real_min_tip'])
+    MaxTX = float(token_info['real_max_tip'])
+
+    user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    if user_from is None:
+        w = await create_address_eth()
+        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
+        user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+
+    userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
+    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    if amount < MinTx:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
+                       f'{num_format_coin(MinTx)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > MaxTX:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
+                       f'{num_format_coin(MaxTX)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif amount > actual_balance:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send tip of '
+                       f'{num_format_coin(amount)} '
+                       f'{TOKEN_NAME}.')
+        return
+    listMembers = ctx.message.mentions
+    memids = []  # list of member ID
+    for member in listMembers:
+        if ctx.message.author.id != member.id and member in ctx.guild.members:
+            memids.append(str(member.id))
+    TotalAmount = amount * len(memids)
+
+    if TotalAmount > MaxTX:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Total transaction cannot be bigger than '
+                       f'{num_format_coin(MaxTX, TOKEN_NAME)} '
+                       f'{TOKEN_NAME}.')
+        return
+    elif actual_balance < TotalAmount:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You don\'t have sufficient balance. ')
+        return
+    
+    notifyList = await store.sql_get_tipnotify()
+    try:
+        tips = await store.sql_mv_erc_multiple(str(ctx.message.author.id), memids, amount, TOKEN_NAME, "TIPS", token_info['contract'])
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+    if tips:
+        tipAmount = num_format_coin(TotalAmount)
+        amountDiv_str = num_format_coin(amount)
+        # tipper shall always get DM. Ignore notifyList
+        try:
+            await ctx.message.author.send(
+                f'{EMOJI_ARROW_RIGHTHOOK} Tip of {tipAmount} '
+                f'{TOKEN_NAME} '
+                f'was sent to ({len(memids)}) members in server `{ctx.guild.name}`.\n'
+                f'Each member got: `{amountDiv_str}{TOKEN_NAME}`\n')
+        except (discord.Forbidden, discord.errors.Forbidden) as e:
+            await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
+        for member in ctx.message.mentions:
+            # print(member.name) # you'll just print out Member objects your way.
+            if ctx.message.author.id != member.id and member.id != bot.user.id and str(member.id) not in notifyList:
+                try:
+                    await member.send(f'{EMOJI_MONEYFACE} You got a tip of `{amountDiv_str}{TOKEN_NAME}` '
+                                      f'from {ctx.message.author.name}#{ctx.message.author.discriminator} in server `{ctx.guild.name}`\n'
+                                      f'{NOTIFICATION_OFF_CMD}')
+                except (discord.Forbidden, discord.errors.Forbidden) as e:
+                    await store.sql_toggle_tipnotify(str(member.id), "OFF")
+        await ctx.message.add_reaction(EMOJI_OK_HAND)
+    else:
+        await ctx.message.add_reaction(EMOJI_ERROR)
+    return
+
+
+# Let's run balance update by a separate process
+async def update_balance():
+    INTERVAL_EACH = 10
+    while True:
+        await asyncio.sleep(INTERVAL_EACH)
+        start = time.time()
+        try:
+            await store.sql_check_minimum_deposit()
+        except Exception as e:
+            print(e)
+        end = time.time()
+        await asyncio.sleep(INTERVAL_EACH)
+
+
+async def unlocked_move_pending():
+    INTERVAL_EACH = 10
+    while True:
+        await asyncio.sleep(INTERVAL_EACH)
+        start = time.time()
+        try:
+            await store.sql_check_pending_move_deposit()
+        except Exception as e:
+            print(e)
+        end = time.time()
+        await asyncio.sleep(INTERVAL_EACH)
+
+
+async def notify_new_confirmed_spendable():
+    INTERVAL_EACH = 10
+    is_notify_failed = False
+    while True:
+        await asyncio.sleep(INTERVAL_EACH)
+        start = time.time()
+        try:
+            notify_list = await store.sql_get_pending_notification_users()
+            if notify_list and len(notify_list) > 0:
+                for each_notify in notify_list:
+                    member = bot.get_user(id=int(each_notify['user_id']))
+                    if member:
+                        msg = "You got a new deposit confirmed: ```" + "Amount: {}{}".format(each_notify['real_amount'], TOKEN_NAME) + "```"
+                        try:
+                            await member.send(msg)
+                        except (discord.Forbidden, discord.errors.Forbidden) as e:
+                            is_notify_failed = True
+                        except Exception as e:
+                            traceback.print_exc(file=sys.stdout)
+                        update_status = await store.sql_updating_pending_move_deposit(True, is_notify_failed, each_notify['txn'])
+        except Exception as e:
+            print(e)
+        end = time.time()
+        await asyncio.sleep(INTERVAL_EACH)
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.NoPrivateMessage):
+        await ctx.send('This command cannot be used in private messages.')
+    elif isinstance(error, commands.DisabledCommand):
+        await ctx.send('Sorry. This command is disabled and cannot be used.')
+    elif isinstance(error, commands.MissingRequiredArgument):
+        #command = ctx.message.content.split()[0].strip('.')
+        #await ctx.send('Missing an argument: try `.help` or `.help ' + command + '`')
+        pass
+    elif isinstance(error, commands.CommandNotFound):
+        pass
+
+
+async def is_owner(ctx):
+    return ctx.author.id == config.discord.ownerID
+
+
+# function to return if input string is ascii
+def is_ascii(s):
+    return all(ord(c) < 128 for c in s)
+
+
+def seconds_str(time: float):
+    # day = time // (24 * 3600)
+    # time = time % (24 * 3600)
+    hour = time // 3600
+    time %= 3600
+    minutes = time // 60
+    time %= 60
+    seconds = time
+    return "{:02d}:{:02d}:{:02d}".format(hour, minutes, seconds)
+
+
+def num_format_coin(amount):
+    return '{:,}'.format(float('%.8g' % (amount)))
+
+
+@register.error
+async def register_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Missing your wallet address. '
+                       f'You need to have a supported coin **address** after `register` command. Example: {config.discord.prefixCmd}register coin_address')
+    return
+
+
+@withdraw.error
+async def withdraw_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Missing amount. '
+                       f'You need to tell me **AMOUNT**.\nExample: {config.discord.prefixCmd}withdraw **1,000**')
+    return
+
+
+@tip.error
+async def tip_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Missing arguments. '
+                       f'You need to tell me **amount** and who you want to tip to.\nExample: {config.discord.prefixCmd}tip **1,000** <@{bot.user.id}>')
+    return
+
+
+@gtip.error
+async def gtip_error(ctx, error):
+    # TODO: flexible prefix
+    prefix = '.'
+    if isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send('This command is not available in DM.')
+        return
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(f'{ctx.author.mention} You do not have permission in this guild **{ctx.guild.name}** Please use normal {prefix}tip command instead.')
+        return
+
+
+def randomString(stringLength=8):
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(stringLength))
+
+
+def truncate(number, digits) -> float:
+    stepper = pow(10.0, digits)
+    return math.trunc(stepper * number) / stepper
+
+
+@click.command()
+def main():
+    bot.loop.create_task(update_balance())
+    bot.loop.create_task(unlocked_move_pending())
+    bot.loop.create_task(notify_new_confirmed_spendable())
+    bot.run(config.discord.token, reconnect=True)
+
+
+if __name__ == '__main__':
+    main()
