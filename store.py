@@ -403,8 +403,6 @@ async def sql_check_minimum_deposit():
                         mnemonic=each_address['seed'])
                     signed_txn = w3.eth.account.signTransaction(unicorn_txn, private_key=acct.key)
                     sent_tx = w3.eth.sendRawTransaction(signed_txn.rawTransaction)
-                    #print('sent_tx:')
-                    #print(sent_tx)
                     if signed_txn and sent_tx:
                         # Add to SQL
                         try:
@@ -442,25 +440,10 @@ async def sql_check_minimum_deposit():
                         }
                     key = config.eth.MainAddress_key
                     signed = w3.eth.account.sign_transaction(transaction, key)
-                    print('signed.rawTransaction:')
-                    print(signed.rawTransaction)
                     # send Transaction for gas:
                     send_gas_tx = w3.eth.sendRawTransaction(signed.rawTransaction)
                     if send_gas_tx:
                         print('send_gas_tx: '+ send_gas_tx.hex())
-                    #signed.rawTransaction
-                    ##HexBytes('0xf86a8086d55698372431831e848094f0109fc8df283027b6285cc889f5aa624eac1f55843b9aca008025a009ebb6ca057a0535d6186462bc0b465b561c94a295bdb0621fc19208ab149a9ca0440ffd775ce91a833ab410777204d5341a6f9fa91216a6f3ee2c051fea6a0428')
-                    #signed.hash
-                    ##HexBytes('0xd8f64a42b57be0d565f385378db2f6bf324ce14a594afc05de90436e9ce01f60')
-                    ##signed.r
-                    #4487286261793418179817841024889747115779324305375823110249149479905075174044
-                    ##signed.s
-                    #30785525769477805655994251009256770582792548537338581640010273753578382951464
-                    #signed.v
-                    ##37
-                    ## When you run sendRawTransaction, you get back the hash of the transaction:
-                    #w3.eth.sendRawTransaction(signed.rawTransaction)  
-                    ##'0xd8f64a42b57be0d565f385378db2f6bf324ce14a594afc05de90436e9ce01f60'
                 elif gas_of_address / 10**18 < config.eth.min_gas_move and main_balance_gas_sufficient == False:
                     print('Main address has no sufficient balance to supply gas {}'.format(each_address['balance_wallet_address']))
                 else:
@@ -559,7 +542,6 @@ async def sql_get_block_number():
                 if response.status == 200:
                     res_data = await response.read()
                     res_data = res_data.decode('utf-8')
-                    print(res_data)
                     await session.close()
                     decoded_data = json.loads(res_data)
                     if decoded_data and 'result' in decoded_data:
