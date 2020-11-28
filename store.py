@@ -359,12 +359,9 @@ async def sql_check_minimum_deposit():
     # main balance has gas?
     main_balance_gas_sufficient = True
     if gas_main_balance and gas_main_balance / 10**18 >= config.eth.min_gas_tx:
-        # OK can move
-        #print('There is sufficient gas: {}ETH'.format(gas_main_balance / 10**18))
         pass
     else:
         main_balance_gas_sufficient = False
-        #print('No sufficient gas to move balance. We have only {}ETH'.format(gas_main_balance / 10**18))
         pass
     if list_user_addresses and len(list_user_addresses) > 0:
         # OK check them one by one
@@ -372,10 +369,8 @@ async def sql_check_minimum_deposit():
             deposited_balance = await http_wallet_getbalance(each_address['balance_wallet_address'], TOKEN_NAME)
             real_deposited_balance = deposited_balance / 10**token_info['token_decimal']
             if real_deposited_balance < config.moon.min_move_deposit:
-                #print('address: {} has less than minimum deposit required: {}'.format(each_address['balance_wallet_address'], config.moon.min_move_deposit))
                 pass
             else:
-                #print('OK, let s move address: {} with balance {}'.format(each_address['balance_wallet_address'], real_deposited_balance))
                 # Check if there is gas remaining to spend there
                 gas_of_address = await http_wallet_getbalance(each_address['balance_wallet_address'], "ETH")
                 if gas_of_address / 10**18 >= config.eth.min_gas_move:
@@ -412,7 +407,6 @@ async def sql_check_minimum_deposit():
                         except Exception as e:
                             traceback.print_exc(file=sys.stdout)
                 elif gas_of_address / 10**18 < config.eth.min_gas_move and main_balance_gas_sufficient:
-                    print('Address {} has not sufficient gas. Currently {}ETH'.format(each_address['balance_wallet_address'], gas_of_address / 10**18))
                     # HTTPProvider:
                     w3 = Web3(Web3.HTTPProvider('http://'+config.moon.eth_default_rpc))
 
@@ -420,13 +414,12 @@ async def sql_check_minimum_deposit():
                     # w3.middleware_onion.inject(geth_poa_middleware, layer=0)
                     # TODO: Let's move gas from main to have sufficient to move
                     nonce = w3.eth.getTransactionCount(w3.toChecksumAddress(config.eth.MainAddress))
-                    
-                    print('nonce of main address: '+str(nonce))
+
                     # get gas price
                     gasPrice = w3.eth.gasPrice
-                    print('gasPrice: '+str(gasPrice))
+
                     estimateGas = w3.eth.estimateGas({'to': w3.toChecksumAddress(each_address['balance_wallet_address']), 'from': w3.toChecksumAddress(config.eth.MainAddress), 'value':  int(config.eth.move_gas_amount * 10**18)})
-                    print('estimateGas: '+str(estimateGas))
+
                     amount_gas_move = int(config.eth.move_gas_amount * 10**18) * config.eth.move_gas_factored_estimate
                     if amount_gas_move < config.eth.move_gas_amount * 10**18: amount_gas_move = int(config.eth.move_gas_amount * 10**18)
                     transaction = {
@@ -442,8 +435,6 @@ async def sql_check_minimum_deposit():
                     signed = w3.eth.account.sign_transaction(transaction, key)
                     # send Transaction for gas:
                     send_gas_tx = w3.eth.sendRawTransaction(signed.rawTransaction)
-                    if send_gas_tx:
-                        print('send_gas_tx: '+ send_gas_tx.hex())
                 elif gas_of_address / 10**18 < config.eth.min_gas_move and main_balance_gas_sufficient == False:
                     print('Main address has no sufficient balance to supply gas {}'.format(each_address['balance_wallet_address']))
                 else:
@@ -486,13 +477,7 @@ async def sql_check_pending_move_deposit():
             if check_tx:
                 tx_block_number = int(check_tx['blockNumber'], 16)
                 if topBlock - config.eth.confirmation > tx_block_number:
-                    print('{} has more block confirmation!'.format(each_tx['txn']))
                     confirming_tx = await sql_update_confirming_move_tx(each_tx['txn'], tx_block_number, topBlock - tx_block_number)
-                    # TODO update status from pending to confirm
-                else:
-                    print('{} has not sufficient block confirmation!'.format(each_tx['txn']))
-    else:
-        print('There is no pending Tx to confirm in moving')
         
 
 async def sql_update_confirming_move_tx(tx: str, blockNumber: int, confirmed_depth: int):

@@ -1,0 +1,37 @@
+# MySQL connection information
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "tipbot"
+  password: "password"
+  db: "tipbot"
+discord:
+  prefixCmd: "."
+  ownerID: 386761001808166912
+  token: "...."
+  botuserid: 777771676636413972
+interval:
+  pending_tx: 20 # 20s
+freetip:
+ duration_min: 30 # seconds
+ duration_max: 300 # seconds
+ max_display_users: 20
+notify_new_tx:
+  enable_new_no_confirm: 1
+  duration_new_tx: 60 #s
+eth:
+  min_gas_tx: 0.05 # real amount
+  MainAddress: "0xe356b1d44ba29b35691b70be3b43a5e1e38e8f01" # change it
+  MainAddress_key: "key..."
+  MainAddress_seed: "seed..."
+  min_gas_move: 0.0001  # real amount
+  move_gas_amount: 0.001
+  move_gas_factored_estimate: 4
+  confirmation: 12
+moon:
+  eth_default_rpc: "localhost:18545"
+  min_move_deposit: 3 # real amount
+  ticker: "MOON"
+  MainAddress: "0xe356b1d44ba29b35691b70be3b43a5e1e38e8f01" # change it
+  remark: "This token is running with rinkeby Testnet"
+
