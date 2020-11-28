@@ -316,7 +316,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
         msg = await ctx.send(embed=embed)
         await msg.add_reaction(EMOJI_PARTY)
-        if comment and len(TOKEN_NAME) > 0:
+        if comment and len(comment) > 0:
             embed.add_field(name="Comment", value=comment, inline=False)
         embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, timeout: {seconds_str(duration_s)}")
         await msg.edit(embed=embed)
@@ -338,8 +338,8 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         except asyncio.TimeoutError:
             if len(attend_list_id) == 0:
                 embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Already expired", timestamp=ts, color=0x00ff00)
-                if comment and len(TOKEN_NAME) > 0:
-                        embed.add_field(name="Comment", value=comment, inline=False)
+                if comment and len(comment) > 0:
+                    embed.add_field(name="Comment", value=comment, inline=False)
                 embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
                 await msg.edit(embed=embed)
                 await msg.add_reaction(EMOJI_OK_BOX)
@@ -350,7 +350,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
             attend_list_id.append(user.id)
             attend_list_names.append('{}#{}'.format(user.name, user.discriminator))
             embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
-            if comment and len(TOKEN_NAME) > 0:
+            if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
             embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
             embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, timeout: {seconds_str(duration_s)}")
@@ -418,7 +418,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         # Edit embed
         try:
             embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
-            if comment and len(TOKEN_NAME) > 0:
+            if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
             embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
             embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, completed! Collected by {len(attend_list_id)} member(s)")
@@ -535,7 +535,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
         msg = await ctx.send(embed=embed)
         await msg.add_reaction(EMOJI_PARTY)
-        if comment and len(TOKEN_NAME) > 0:
+        if comment and len(comment) > 0:
             embed.add_field(name="Comment", value=comment, inline=False)
         embed.set_footer(text=f"Guild free tip by {ctx.guild.name} / issued by {ctx.author.name}#{ctx.author.discriminator}, timeout: {seconds_str(duration_s)}")
         await msg.edit(embed=embed)
@@ -568,9 +568,15 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
             attend_list_id.append(user.id)
             attend_list_names.append('{}#{}'.format(user.name, user.discriminator))
             embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
-            if comment and len(TOKEN_NAME) > 0:
+            if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
-            embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
+            try:
+                if len(attend_list_id) < config.freetip.max_display_users:
+                    embed.add_field(name=f"Attendees [{len(attend_list_id)}]", value=", ".join(attend_list_names), inline=False)
+                else:
+                    embed.add_field(name=f"Attendees [{len(attend_list_id)}]", value=", ".join(attend_list_names[:config.freetip.max_display_users]), inline=False)
+            except Exception as e:
+                traceback.print_exc(file=sys.stdout)
             embed.set_footer(text=f"Guild free tip by {ctx.guild.name} / issued by {ctx.author.name}#{ctx.author.discriminator}, timeout: {seconds_str(duration_s)}")
             await msg.edit(embed=embed)
             duration_s -= int(time.time()) - start_time
@@ -636,7 +642,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         # Edit embed
         try:
             embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
-            if comment and len(TOKEN_NAME) > 0:
+            if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
             embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
             embed.set_footer(text=f"Guild free tip by {ctx.guild.name} / issued by {ctx.author.name}#{ctx.author.discriminator}, completed! Collected by {len(attend_list_id)} member(s)")
@@ -1149,6 +1155,13 @@ async def register(ctx, wallet_address: str):
                        f'`{wallet_address}`')
         return
 
+    if wallet_address.upper().startswith("0X0000000000000000000000000000000"):
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid address:\n'
+                             f'`{wallet_address}`')
+        await msg.add_reaction(EMOJI_OK_BOX)
+        return
+
     user = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
     if user is None:
         w = await create_address_eth()
@@ -1163,16 +1176,18 @@ async def register(ctx, wallet_address: str):
         valid = True
     else:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid address:\n'
-                       f'`{wallet_address}`')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid address:\n'
+                             f'`{wallet_address}`')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
 
     # if they want to register with tipjar address
     try:
         if user['balance_wallet_address'].upper() == wallet_address.upper():
             await ctx.message.add_reaction(EMOJI_ERROR)
-            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You can not register with your tipjar\'s address.\n'
-                           f'`{wallet_address}`')
+            msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You can not register with your tipjar\'s address.\n'
+                               f'`{wallet_address}`')
+            await msg.add_reaction(EMOJI_OK_BOX)
             return
         else:
             pass
@@ -1185,8 +1200,9 @@ async def register(ctx, wallet_address: str):
     check_in_balance_users = await store.sql_check_balance_address_in_users(wallet_address)
     if check_in_balance_users:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You can not register with any of user\'s tipjar\'s address.\n'
-                       f'`{wallet_address}`')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You can not register with any of user\'s tipjar\'s address.\n'
+                             f'`{wallet_address}`')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
 
     if 'user_wallet_address' in existing_user and existing_user['user_wallet_address']:
@@ -1194,20 +1210,23 @@ async def register(ctx, wallet_address: str):
         if prev_address.upper() != wallet_address.upper():
             await store.sql_update_user(str(ctx.message.author.id), wallet_address, TOKEN_NAME)
             await ctx.message.add_reaction(EMOJI_OK_HAND)
-            await ctx.send(f'{ctx.author.mention} Your withdraw address has changed from:\n'
-                           f'`{prev_address}`\n to\n '
-                           f'`{wallet_address}`')
+            msg = await ctx.send(f'{ctx.author.mention} Your withdraw address has changed from:\n'
+                                 f'`{prev_address}`\n to\n '
+                                 f'`{wallet_address}`')
+            await msg.add_reaction(EMOJI_OK_BOX)
             return
         else:
             await ctx.message.add_reaction(EMOJI_ERROR)
-            await ctx.send(f'{ctx.author.mention} Your previous and new address is the same.')
+            msg = await ctx.send(f'{ctx.author.mention} Your previous and new address is the same.')
+            await msg.add_reaction(EMOJI_OK_BOX)
             return
     else:
         try:
             await store.sql_update_user(str(ctx.message.author.id), wallet_address, TOKEN_NAME)
             await ctx.message.add_reaction(EMOJI_OK_HAND)
-            await ctx.send(f'{ctx.author.mention} You have registered a withdraw address.\n'
-                           f'You can use `{config.discord.prefixCmd}withdraw AMOUNT` anytime.')
+            msg = await ctx.send(f'{ctx.author.mention} You have registered a withdraw address.\n'
+                                 f'You can use `{config.discord.prefixCmd}withdraw AMOUNT` anytime.')
+            await msg.add_reaction(EMOJI_OK_BOX)
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
         return
@@ -1221,7 +1240,8 @@ async def withdraw(ctx, amount: str):
         amount = float(amount)
     except ValueError:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid given amount for command withdraw.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid given amount for command withdraw.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
 
     token_info = await store.get_token_info(TOKEN_NAME)
@@ -1237,8 +1257,9 @@ async def withdraw(ctx, amount: str):
     CoinAddress = None
     if 'user_wallet_address' in user_from and user_from['user_wallet_address'] is None:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You do not have a withdrawal address, please use '
-                       f'`{config.discord.prefixCmd}register wallet_address` to register.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You do not have a withdrawal address, please use '
+                             f'`{config.discord.prefixCmd}register wallet_address` to register.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     else:
         CoinAddress = user_from['user_wallet_address']
@@ -1251,33 +1272,38 @@ async def withdraw(ctx, amount: str):
     # If balance 0, no need to check anything
     if actual_balance <= 0:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Please check your **{TOKEN_NAME}** balance.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Please check your **{TOKEN_NAME}** balance.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     if amount > actual_balance:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send out '
-                       f'{num_format_coin(amount)} '
-                       f'{TOKEN_NAME}.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send out '
+                             f'{num_format_coin(amount)} '
+                             f'{TOKEN_NAME}.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
 
     NetFee = token_info['real_withdraw_fee']
     if amount + NetFee > actual_balance:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send out '
-                       f'{num_format_coin(amount)} '
-                       f'{TOKEN_NAME}. You need to leave at least network fee: {num_format_coin(NetFee)}{TOKEN_NAME}')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send out '
+                             f'{num_format_coin(amount)} '
+                             f'{TOKEN_NAME}. You need to leave at least network fee: {num_format_coin(NetFee)}{TOKEN_NAME}')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     elif amount < MinTx:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transaction cannot be smaller than '
-                       f'{num_format_coin(MinTx)} '
-                       f'{TOKEN_NAME}.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transaction cannot be smaller than '
+                             f'{num_format_coin(MinTx)} '
+                             f'{TOKEN_NAME}.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     elif amount > MaxTX:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transaction cannot be bigger than '
-                       f'{num_format_coin(MaxTX)} '
-                       f'{TOKEN_NAME}.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transaction cannot be bigger than '
+                             f'{num_format_coin(MaxTX)} '
+                             f'{TOKEN_NAME}.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
 
     SendTx = None
@@ -1295,9 +1321,10 @@ async def withdraw(ctx, amount: str):
         return
     if SendTx:
         await ctx.message.add_reaction(EMOJI_OK_BOX)
-        await ctx.send(f'{EMOJI_ARROW_RIGHTHOOK} You have withdrawn {num_format_coin(amount)} '
-                       f'{TOKEN_NAME} to `{CoinAddress}`.\n'
-                       f'Transaction hash: `{SendTx}`')
+        msg = await ctx.send(f'{EMOJI_ARROW_RIGHTHOOK} You have withdrawn {num_format_coin(amount)} '
+                             f'{TOKEN_NAME} to `{CoinAddress}`.\n'
+                             f'Transaction hash: `{SendTx}`')
+        await msg.add_reaction(EMOJI_OK_BOX)
     else:
             await ctx.message.add_reaction(EMOJI_ERROR)
     return
@@ -1320,21 +1347,24 @@ async def _tip(ctx, amount, coin: str):
     actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
     if amount < MinTx:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
-                       f'{num_format_coin(MinTx)} '
-                       f'{TOKEN_NAME}.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
+                             f'{num_format_coin(MinTx)} '
+                             f'{TOKEN_NAME}.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     elif amount > MaxTX:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
-                       f'{num_format_coin(MaxTX)} '
-                       f'{TOKEN_NAME}.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
+                             f'{num_format_coin(MaxTX)} '
+                             f'{TOKEN_NAME}.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     elif amount > actual_balance:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send tip of '
-                       f'{num_format_coin(amount)} '
-                       f'{TOKEN_NAME}.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send tip of '
+                             f'{num_format_coin(amount)} '
+                             f'{TOKEN_NAME}.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     listMembers = ctx.message.mentions
     memids = []  # list of member ID
@@ -1345,13 +1375,15 @@ async def _tip(ctx, amount, coin: str):
 
     if TotalAmount > MaxTX:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Total transaction cannot be bigger than '
-                       f'{num_format_coin(MaxTX, TOKEN_NAME)} '
-                       f'{TOKEN_NAME}.')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Total transaction cannot be bigger than '
+                             f'{num_format_coin(MaxTX, TOKEN_NAME)} '
+                             f'{TOKEN_NAME}.')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     elif actual_balance < TotalAmount:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You don\'t have sufficient balance. ')
+        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You don\'t have sufficient balance. ')
+        await msg.add_reaction(EMOJI_OK_BOX)
         return
     
     notifyList = await store.sql_get_tipnotify()
