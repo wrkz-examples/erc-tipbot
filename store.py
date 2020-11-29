@@ -644,9 +644,9 @@ async def sql_toggle_tipnotify(user_id: str, onoff: str):
                         await cur.execute(sql, (user_id, int(time.time())))
                         await conn.commit()
         except pymysql.err.Warning as e:
-            await logchanbot(traceback.format_exc())
+            traceback.print_exc(file=sys.stdout)
         except Exception as e:
-            await logchanbot(traceback.format_exc())
+            traceback.print_exc(file=sys.stdout)
     elif onoff == "ON":
         try:
             await openConnection()
@@ -656,7 +656,7 @@ async def sql_toggle_tipnotify(user_id: str, onoff: str):
                     await cur.execute(sql, str(user_id))
                     await conn.commit()
         except Exception as e:
-            await logchanbot(traceback.format_exc())
+            traceback.print_exc(file=sys.stdout)
 
 
 async def sql_get_tipnotify():
@@ -673,4 +673,55 @@ async def sql_get_tipnotify():
                     ignorelist.append(row['user_id'])
                 return ignorelist
     except Exception as e:
-        await logchanbot(traceback.format_exc())
+        traceback.print_exc(file=sys.stdout)
+
+
+async def sql_add_messages(list_messages):
+    if len(list_messages) == 0:
+        return 0
+    global pool
+    try:
+        await openConnection()
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                sql = """ INSERT IGNORE INTO `discord_messages` (`serverid`, `server_name`, `channel_id`, `channel_name`, `user_id`, 
+                          `message_author`, `message_id`, `message_content`, `message_time`)
+                          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) """
+                await cur.executemany(sql, list_messages)
+                await conn.commit()
+                return cur.rowcount
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+    return None
+
+
+async def sql_get_messages(server_id: str, channel_id: str, time_int: int, num_user: int=None):
+    global pool
+    lapDuration = int(time.time()) - time_int
+    try:
+        await openConnection()
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                list_talker = []
+                if num_user is None:
+                    sql = """ SELECT DISTINCT `user_id` FROM discord_messages 
+                              WHERE `serverid` = %s AND `channel_id` = %s AND `message_time`>%s """
+                    await cur.execute(sql, (server_id, channel_id, lapDuration,))
+                    result = await cur.fetchall()
+                    if result:
+                        for item in result:
+                            if int(item['user_id']) not in list_talker:
+                                list_talker.append(int(item['user_id']))
+                else:
+                    sql = """ SELECT `user_id` FROM discord_messages WHERE `serverid` = %s AND `channel_id` = %s 
+                              GROUP BY `user_id` ORDER BY max(`message_time`) DESC LIMIT %s """
+                    await cur.execute(sql, (server_id, channel_id, num_user,))
+                    result = await cur.fetchall()
+                    if result:
+                        for item in result:
+                            if int(item['user_id']) not in list_talker:
+                                list_talker.append(int(item['user_id']))
+                return list_talker
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+    return None
