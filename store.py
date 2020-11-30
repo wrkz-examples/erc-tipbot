@@ -725,3 +725,40 @@ async def sql_get_messages(server_id: str, channel_id: str, time_int: int, num_u
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
     return None
+
+
+async def sql_info_by_server(server_id: str):
+    global pool
+    try:
+        await openConnection()
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                sql = """ SELECT * FROM discord_server WHERE serverid = %s LIMIT 1 """
+                await cur.execute(sql, (server_id,))
+                result = await cur.fetchone()
+                return result
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+    return None
+
+
+async def sql_addinfo_by_server(server_id: str, servername: str, prefix: str, rejoin: bool = True):
+    global pool
+    try:
+        await openConnection()
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                if rejoin:
+                    sql = """ INSERT INTO `discord_server` (`serverid`, `servername`, `prefix`)
+                              VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE 
+                              `servername` = %s, `prefix` = %s, `status` = %s """
+                    await cur.execute(sql, (server_id, servername[:28], prefix, servername[:28], prefix, "REJOINED"))
+                    await conn.commit()
+                else:
+                    sql = """ INSERT INTO `discord_server` (`serverid`, `servername`, `prefix`)
+                              VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE 
+                              `servername` = %s, `prefix` = %s """
+                    await cur.execute(sql, (server_id, servername[:28], prefix, servername[:28], prefix))
+                    await conn.commit()
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)

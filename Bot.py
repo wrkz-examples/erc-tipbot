@@ -91,12 +91,22 @@ async def get_prefix(bot, message):
     """Gets the prefix for the guild"""
     pre_cmd = config.discord.prefixCmd
     if isinstance(message.channel, discord.DMChannel):
-        pre_cmd = config.discord.prefixCmd
-        extras = [pre_cmd, 'm.', 'moon!', '.']
+        extras = [pre_cmd, 'm!', 'moon!', '?', '.', '+', '!', '-']
         return when_mentioned_or(*extras)(bot, message)
 
-    extras = [pre_cmd, 'm.', 'moon!', '.']
+    serverinfo = await store.sql_info_by_server(str(message.guild.id))
+    if serverinfo is None:
+        # Let's add some info if guild return None
+        add_server_info = await store.sql_addinfo_by_server(str(message.guild.id), message.guild.name,
+                                                            config.discord.prefixCmd)
+        serverinfo = await store.sql_info_by_server(str(message.guild.id))
+    if serverinfo and 'prefix' in serverinfo:
+        pre_cmd = serverinfo['prefix']
+    else:
+        pre_cmd =  config.discord.prefixCmd
+    extras = [pre_cmd, 'm!', 'moon!']
     return when_mentioned_or(*extras)(bot, message)
+
 
 bot = AutoShardedBot(command_prefix=get_prefix, owner_id = config.discord.ownerID, case_insensitive=True, intents=intents)
 
@@ -236,6 +246,18 @@ async def fetchtalk(ctx, channelid: int, countmsg: int=5000):
         await ctx.message.add_reaction(EMOJI_ERROR)
         await ctx.send(f'{ctx.author.mention} I can not find channel **{channelid}**.')
         return
+
+
+@bot.command(hidden = True, pass_context=True, name='prefix')
+async def prefix(ctx):
+    prefix = await get_guild_prefix(ctx)
+    try:
+        msg = await ctx.send(f'{EMOJI_INFORMATION} {ctx.author.mention}, the prefix here is **{prefix}**')
+        await msg.add_reaction(EMOJI_OK_BOX)
+    except (discord.errors.NotFound, discord.errors.Forbidden) as e:
+        await msg.add_reaction(EMOJI_ERROR)
+        await logchanbot(traceback.format_exc())
+    return
 
 
 @bot.command(pass_context=True, name='about', help=bot_help_about)
@@ -2396,6 +2418,15 @@ async def on_command_error(ctx, error):
 
 async def is_owner(ctx):
     return ctx.author.id == config.discord.ownerID
+
+
+async def get_guild_prefix(ctx):
+    if isinstance(ctx.channel, discord.DMChannel) == True: return "."
+    serverinfo = await store.sql_info_by_server(str(ctx.guild.id))
+    if serverinfo is None:
+        return "."
+    else:
+        return serverinfo['prefix']
 
 
 # function to return if input string is ascii
