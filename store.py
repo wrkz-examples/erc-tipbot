@@ -33,6 +33,17 @@ async def openConnection():
         sys.exit()
 
 
+async def logchanbot(content: str):
+    filterword = config.moon.logfilterword.split(",")
+    for each in filterword:
+        content = content.replace(each, config.moon.filteredwith)
+    try:
+        webhook = DiscordWebhook(url=config.moon.webhook_url, content=f'```{discord.utils.escape_markdown(content)}```')
+        webhook.execute()
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+
+
 async def get_token_info(coin: str):
     global pool
     TOKEN_NAME = coin.upper()
@@ -47,6 +58,7 @@ async def get_token_info(coin: str):
                 if result: return result
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -61,6 +73,7 @@ async def validate_address(address: str):
         return w3.toChecksumAddress(address)
     except ValueError:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -84,6 +97,7 @@ async def http_wallet_getbalance(address: str, coin: str) -> Dict:
             print('TIMEOUT: get balance {} for {}s'.format(TOKEN_NAME, timeout))
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
     else:
         token_info = await get_token_info(TOKEN_NAME)
         contract = token_info['contract']
@@ -104,6 +118,7 @@ async def http_wallet_getbalance(address: str, coin: str) -> Dict:
             print('TIMEOUT: get balance {} for {}s'.format(TOKEN_NAME, timeout))
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
     return None
 
 
@@ -136,10 +151,12 @@ async def sql_register_user(userID, coin: str, w, user_server: str):
                         return balance_address
                     except Exception as e:
                         traceback.print_exc(file=sys.stdout)
+                        await logchanbot(traceback.format_exc())
                 else:
                     return result
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -165,6 +182,7 @@ async def sql_get_userwallet(userID, coin: str, user_server: str = 'DISCORD'):
                 if result: return result
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -185,6 +203,7 @@ async def sql_update_user(userID: str, user_wallet_address: str, coin: str, user
                 return user_wallet_address  # return userwallet
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -246,6 +265,7 @@ async def sql_user_balance(userID: str, coin: str, user_server: str = 'DISCORD')
             return balance
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
 
 # XMR Based
@@ -267,6 +287,7 @@ async def sql_mv_erc_single(user_from: str, to_user: str, amount: float, coin: s
                 return True
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return False
 
 
@@ -296,6 +317,7 @@ async def sql_mv_erc_multiple(user_from: str, user_tos, amount_each: float, coin
                 return True
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return False
 
 
@@ -345,8 +367,10 @@ async def sql_external_erc_single(user_id: str, to_address: str, amount: float, 
                         return sent_tx.hex()
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
+                await logchanbot(traceback.format_exc())
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
 
 async def sql_check_minimum_deposit():
@@ -406,6 +430,7 @@ async def sql_check_minimum_deposit():
                                                                             sent_tx.hex())
                         except Exception as e:
                             traceback.print_exc(file=sys.stdout)
+                            await logchanbot(traceback.format_exc())
                 elif gas_of_address / 10**18 < config.eth.min_gas_move and main_balance_gas_sufficient:
                     # HTTPProvider:
                     w3 = Web3(Web3.HTTPProvider('http://'+config.moon.eth_default_rpc))
@@ -458,6 +483,7 @@ real_amount: float, real_deposit_fee: float, token_decimal: int, txn: str, user_
                 return True
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return False
 
 async def sql_check_pending_move_deposit():
@@ -493,6 +519,7 @@ async def sql_update_confirming_move_tx(tx: str, blockNumber: int, confirmed_dep
                 return True
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -514,6 +541,7 @@ async def sql_get_tx_info(tx: str):
         print('TIMEOUT: get block number {}s'.format(timeout))
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -535,6 +563,7 @@ async def sql_get_block_number():
         print('TIMEOUT: get block number {}s'.format(timeout))
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -553,6 +582,7 @@ async def sql_get_pending_move_deposit():
                 if result: return result
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -571,6 +601,7 @@ async def sql_get_pending_notification_users():
                 if result: return result
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -589,6 +620,7 @@ async def sql_updating_pending_move_deposit(notified_confirmation: bool, failed_
                 return True
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -606,6 +638,7 @@ async def sql_get_all_erc_user():
                 if result: return result
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -623,6 +656,7 @@ async def sql_check_balance_address_in_users(address: str):
                 if result: return True
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -645,8 +679,10 @@ async def sql_toggle_tipnotify(user_id: str, onoff: str):
                         await conn.commit()
         except pymysql.err.Warning as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
     elif onoff == "ON":
         try:
             await openConnection()
@@ -657,6 +693,7 @@ async def sql_toggle_tipnotify(user_id: str, onoff: str):
                     await conn.commit()
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
 
 
 async def sql_get_tipnotify():
@@ -674,6 +711,7 @@ async def sql_get_tipnotify():
                 return ignorelist
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
 
 async def sql_add_messages(list_messages):
@@ -692,6 +730,7 @@ async def sql_add_messages(list_messages):
                 return cur.rowcount
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -724,6 +763,7 @@ async def sql_get_messages(server_id: str, channel_id: str, time_int: int, num_u
                 return list_talker
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -739,6 +779,7 @@ async def sql_info_by_server(server_id: str):
                 return result
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     return None
 
 
@@ -761,4 +802,28 @@ async def sql_addinfo_by_server(server_id: str, servername: str, prefix: str, re
                     await cur.execute(sql, (server_id, servername[:28], prefix, servername[:28], prefix))
                     await conn.commit()
     except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
+
+
+async def sql_updateinfo_by_server(server_id: str, what: str, value: str):
+    global pool
+    try:
+        await openConnection()
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                sql = """ SELECT * FROM discord_server WHERE serverid = %s """
+                await cur.execute(sql, (server_id,))
+                result = await cur.fetchone()
+                if result is None:
+                    return None
+                else:
+                    if what in ["servername", "prefix", "status"]:
+                        sql = """ UPDATE discord_server SET `"""+what+"""`=%s WHERE serverid=%s """
+                        await cur.execute(sql, (value, server_id,))
+                        await conn.commit()
+                    else:
+                        return None
+    except Exception as e:
+        await logchanbot(str(traceback.format_exc()) + "\n\n" + f"({sql}, ({what}, {value}, {server_id},)")
         traceback.print_exc(file=sys.stdout)

@@ -88,9 +88,9 @@ def openRedis():
 
 
 async def logchanbot(content: str):
-    filterword = config.discord.logfilterword.split(",")
+    filterword = config.moon.logfilterword.split(",")
     for each in filterword:
-        content = content.replace(each, config.discord.filteredwith)
+        content = content.replace(each, config.moon.filteredwith)
     try:
         webhook = DiscordWebhook(url=config.moon.webhook_url, content=f'```{discord.utils.escape_markdown(content)}```')
         webhook.execute()
@@ -146,6 +146,23 @@ async def on_ready():
     print('------')
     game = discord.Game(name="m.")
     await bot.change_presence(status=discord.Status.online, activity=game)
+
+
+@bot.event
+async def on_guild_join(guild):
+    botLogChan = bot.get_channel(id=int(config.moon.logchan))
+    add_server_info = await store.sql_addinfo_by_server(str(guild.id), guild.name,
+                                                        config.discord.prefixCmd)
+    await botLogChan.send(f'Bot joins a new guild {guild.name} / {guild.id} / Users: {len(guild.members)}. Total guilds: {len(bot.guilds)}.')
+    return
+
+
+@bot.event
+async def on_guild_remove(guild):
+    botLogChan = bot.get_channel(id=int(config.moon.logchan))
+    add_server_info = await store.sql_updateinfo_by_server(str(guild.id), "status", "REMOVED")
+    await botLogChan.send(f'Bot was removed from guild {guild.name} / {guild.id}. Total guilds: {len(bot.guilds)}')
+    return
 
 
 @bot.event
@@ -2289,13 +2306,13 @@ async def _tip_talker(ctx, amount, list_talker, if_guild: bool=False, coin: str 
 
     notifyList = await store.sql_get_tipnotify()
 
-    user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+    user_from = await store.sql_get_userwallet(id_tipper, TOKEN_NAME)
     if user_from is None:
         w = await create_address_eth()
-        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
-        user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
+        user_from = await store.sql_register_user(id_tipper, TOKEN_NAME, w, 'DISCORD')
+        user_from = await store.sql_get_userwallet(id_tipper, TOKEN_NAME)
 
-    userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
+    userdata_balance = await store.sql_user_balance(id_tipper, TOKEN_NAME)
     actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
 
     if amount > MaxTX:
