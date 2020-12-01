@@ -1,4 +1,5 @@
 import discord
+from discord_webhook import DiscordWebhook
 from discord.ext import commands
 from discord.ext.commands import Bot, AutoShardedBot, when_mentioned_or, CheckFailure
 from discord.utils import get
@@ -84,6 +85,17 @@ def openRedis():
             redis_conn = redis.Redis(connection_pool=redis_pool)
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+
+
+async def logchanbot(content: str):
+    filterword = config.discord.logfilterword.split(",")
+    for each in filterword:
+        content = content.replace(each, config.discord.filteredwith)
+    try:
+        webhook = DiscordWebhook(url=config.moon.webhook_url, content=f'```{discord.utils.escape_markdown(content)}```')
+        webhook.execute()
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
 
 
 # Steal from https://github.com/cree-py/RemixBot/blob/master/bot.py#L49
@@ -191,6 +203,7 @@ async def on_raw_reaction_add(payload):
             return
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
         return
     message = None
     author = None
@@ -213,7 +226,56 @@ async def on_raw_reaction_add(payload):
                 return
 
 
-@bot.command(pass_context = True, name='fetchtalk')
+@bot.command(help='Check pending things', hidden = True)
+async def pending(ctx):
+    if ctx.author.id != config.discord.ownerID:
+        return
+
+    if isinstance(ctx.channel, discord.DMChannel) == False:
+        await ctx.message.add_reaction(EMOJI_ERROR) 
+        await ctx.send(f'{ctx.author.mention} This command can not be in public.')
+        return
+
+    ts = datetime.utcnow()
+    embed = discord.Embed(title='Pending Actions', timestamp=ts)
+    embed.add_field(name="Pending Tx", value=str(len(TX_IN_PROCESS)), inline=True)
+    embed.set_footer(text=f"Pending requested by {ctx.message.author.name}#{ctx.message.author.discriminator}")
+    try:
+        msg = await ctx.send(embed=embed)
+        await msg.add_reaction(EMOJI_OK_BOX)
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
+    return
+
+
+@bot.command(help='Clear TX_IN_PROCESS', hidden = True)
+async def cleartx(ctx):
+    global TX_IN_PROCESS
+    if ctx.author.id != config.discord.ownerID:
+        return
+
+    if isinstance(ctx.channel, discord.DMChannel) == False:
+        await ctx.message.add_reaction(EMOJI_ERROR) 
+        await ctx.send(f'{ctx.author.mention} This command can not be in public.')
+        return
+
+    if len(TX_IN_PROCESS) == 0:
+        await ctx.message.author.send(f'{ctx.author.mention} Nothing in tx pending to clear.')
+    else:
+        try:
+            string_ints = [str(num) for num in TX_IN_PROCESS]
+            list_pending = '{' + ', '.join(string_ints) + '}'
+            await ctx.message.add_reaction(EMOJI_WARNING)
+            await ctx.message.author.send(f'{ctx.author.mention} Clearing {str(len(TX_IN_PROCESS))} {list_pending} in pending...')
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
+        TX_IN_PROCESS = [] 
+    return
+
+
+@bot.command(pass_context = True, name='fetchtalk', hidden = True)
 async def fetchtalk(ctx, channelid: int, countmsg: int=5000):
     if ctx.author.id != config.discord.ownerID:
         return
@@ -238,6 +300,7 @@ async def fetchtalk(ctx, channelid: int, countmsg: int=5000):
                     num_add = await store.sql_add_messages(temp_msg_list)
                 except Exception as e:
                     traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
                 await ctx.send(f'{ctx.author.mention} Found {len(temp_msg_list)} message(s) and added {str(num_add)}.')
                 return
         except Exception as e:
@@ -273,6 +336,7 @@ async def about(ctx):
     except Exception as e:
         await ctx.send(embed=botdetails)
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
 
 @bot.command(pass_context=True, name='invite', aliases=['inviteme'], help=bot_help_invite)
@@ -432,6 +496,7 @@ async def randtip(ctx, amount: str, *, rand_option: str=None):
             return
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
         return
 
     notifyList = await store.sql_get_tipnotify()
@@ -486,6 +551,7 @@ async def randtip(ctx, amount: str, *, rand_option: str=None):
         tip = await store.sql_mv_erc_single(str(ctx.message.author.id), str(rand_user.id), amount, TOKEN_NAME, "RANDTIP", token_info['contract'])
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
     # remove queue from randtip
     if ctx.message.author.id in TX_IN_PROCESS:
@@ -528,6 +594,7 @@ async def randtip(ctx, amount: str, *, rand_option: str=None):
                 await msg.add_reaction(EMOJI_OK_BOX)
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
+                await logchanbot(traceback.format_exc())
         await ctx.message.add_reaction(EMOJI_OK_BOX)
         return
 
@@ -698,6 +765,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         tips = await store.sql_mv_erc_multiple(str(ctx.message.author.id), attend_list_id, amountDiv, TOKEN_NAME, "TIPALL", token_info['contract'])
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     if ctx.author.id in TX_IN_PROCESS:
         TX_IN_PROCESS.remove(ctx.message.author.id)
 
@@ -722,6 +790,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                             await store.sql_toggle_tipnotify(str(member.id), "OFF")
                 except Exception as e:
                     traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
         # free tip shall always get DM. Ignore notifyList
         try:
             await ctx.message.author.send(
@@ -743,6 +812,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
             await msg.add_reaction(EMOJI_OK_BOX)
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         await ctx.message.add_reaction(EMOJI_OK_HAND)
     else:
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -894,6 +964,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
                     embed.add_field(name=f"Attendees [{len(attend_list_id)}]", value=", ".join(attend_list_names[:config.freetip.max_display_users]), inline=False)
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
+                await logchanbot(traceback.format_exc())
             embed.set_footer(text=f"Guild free tip by {ctx.guild.name} / issued by {ctx.author.name}#{ctx.author.discriminator}, timeout: {seconds_str(duration_s)}")
             await msg.edit(embed=embed)
             duration_s -= int(time.time()) - start_time
@@ -922,6 +993,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         tips = await store.sql_mv_erc_multiple(str(ctx.guild.id), attend_list_id, amountDiv, TOKEN_NAME, "TIPALL", token_info['contract'])
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     if ctx.guild.id in TX_IN_PROCESS:
         TX_IN_PROCESS.remove(ctx.guild.id)
 
@@ -946,6 +1018,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
                             await store.sql_toggle_tipnotify(str(member.id), "OFF")
                 except Exception as e:
                     traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
         # free tip shall always get DM. Ignore notifyList
         try:
             await ctx.message.author.send(
@@ -967,6 +1040,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
             await msg.add_reaction(EMOJI_OK_BOX)
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         await ctx.message.add_reaction(EMOJI_OK_HAND)
     else:
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -1041,6 +1115,7 @@ async def tip(ctx, amount: str, *args):
                                     await _tip_talker(ctx, amount, message_talker, False, TOKEN_NAME)
                                 except Exception as e:
                                     traceback.print_exc(file=sys.stdout)
+                                    await logchanbot(traceback.format_exc())
                             return
                         elif num_user > 0:
                             message_talker = await store.sql_get_messages(str(ctx.message.guild.id), str(ctx.message.channel.id), 0, num_user + 1)
@@ -1071,6 +1146,7 @@ async def tip(ctx, amount: str, *args):
                                     await _tip_talker(ctx, amount, message_talker, False, TOKEN_NAME)
                                 except Exception as e:
                                     traceback.print_exc(file=sys.stdout)
+                                    await logchanbot(traceback.format_exc())
                             else:
                                 try:
                                     async with ctx.typing():
@@ -1081,6 +1157,7 @@ async def tip(ctx, amount: str, *args):
                                     await _tip_talker(ctx, amount, message_talker, False, TOKEN_NAME)
                                 except Exception as e:
                                     traceback.print_exc(file=sys.stdout)
+                                    await logchanbot(traceback.format_exc())
                                 return
                             return
                         else:
@@ -1122,6 +1199,7 @@ async def tip(ctx, amount: str, *args):
                     time_second = sum(int(num) * mult.get(val, 1) for num, val in re.findall('(\d+)(\w+)', time_string))
                 except Exception as e:
                     traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
                     await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid time given. Please use this example: `.tip 10 last 12mn`')
                     return
                 try:
@@ -1151,6 +1229,7 @@ async def tip(ctx, amount: str, *args):
                                 await _tip_talker(ctx, amount, message_talker, False, TOKEN_NAME)
                             except Exception as e:
                                 traceback.print_exc(file=sys.stdout)
+                                await logchanbot(traceback.format_exc())
                             return
             else:
                 await ctx.message.add_reaction(EMOJI_ERROR)
@@ -1231,6 +1310,7 @@ async def tip(ctx, amount: str, *args):
             tip = await store.sql_mv_erc_single(str(ctx.message.author.id), str(member.id), amount, TOKEN_NAME, "TIP", token_info['contract'])
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         TX_IN_PROCESS.remove(ctx.message.author.id)
     else:
         # reject and tell to wait
@@ -1336,6 +1416,7 @@ async def gtip(ctx, amount: str, *args):
                                     await _tip_talker(ctx, amount, message_talker, True, TOKEN_NAME)
                                 except Exception as e:
                                     traceback.print_exc(file=sys.stdout)
+                                    await logchanbot(traceback.format_exc())
                             return
                         elif num_user > 0:
                             message_talker = await store.sql_get_messages(str(ctx.message.guild.id), str(ctx.message.channel.id), 0, num_user + 1)
@@ -1366,6 +1447,7 @@ async def gtip(ctx, amount: str, *args):
                                     await _tip_talker(ctx, amount, message_talker, True, TOKEN_NAME)
                                 except Exception as e:
                                     traceback.print_exc(file=sys.stdout)
+                                    await logchanbot(traceback.format_exc())
                             else:
                                 try:
                                     async with ctx.typing():
@@ -1376,6 +1458,7 @@ async def gtip(ctx, amount: str, *args):
                                     await _tip_talker(ctx, amount, message_talker, True, TOKEN_NAME)
                                 except Exception as e:
                                     traceback.print_exc(file=sys.stdout)
+                                    await logchanbot(traceback.format_exc())
                                 return
                             return
                         else:
@@ -1417,6 +1500,7 @@ async def gtip(ctx, amount: str, *args):
                     time_second = sum(int(num) * mult.get(val, 1) for num, val in re.findall('(\d+)(\w+)', time_string))
                 except Exception as e:
                     traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
                     await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid time given. Please use this example: `.tip 1,000 last 5h 12mn`')
                     return
                 try:
@@ -1446,6 +1530,7 @@ async def gtip(ctx, amount: str, *args):
                                 await _tip_talker(ctx, amount, message_talker, True, TOKEN_NAME)
                             except Exception as e:
                                 traceback.print_exc(file=sys.stdout)
+                                await logchanbot(traceback.format_exc())
                             return
             else:
                 await ctx.message.add_reaction(EMOJI_ERROR)
@@ -1526,6 +1611,7 @@ async def gtip(ctx, amount: str, *args):
             tip = await store.sql_mv_erc_single(str(ctx.guild.id), str(member.id), amount, TOKEN_NAME, "TIP", token_info['contract'])
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         TX_IN_PROCESS.remove(ctx.guild.id)
     else:
         # reject and tell to wait
@@ -1635,6 +1721,7 @@ async def tipall(ctx, amount: str, user: str='ONLINE'):
             tips = await store.sql_mv_erc_multiple(str(ctx.message.author.id), memids, amountDiv, TOKEN_NAME, "TIPALL", token_info['contract'])
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         TX_IN_PROCESS.remove(ctx.message.author.id)
     else:
         msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You have another tx in process. Please wait it to finish. ')
@@ -1660,6 +1747,7 @@ async def tipall(ctx, amount: str, user: str='ONLINE'):
                             await store.sql_toggle_tipnotify(str(member.id), "OFF")
                 except Exception as e:
                     traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
         # tipper shall always get DM. Ignore notifyList
         try:
             await ctx.message.author.send(
@@ -1704,13 +1792,25 @@ async def balance(ctx):
             total_balance = real_deposit_balance + wallet['real_actual_balance'] + userdata_balance['Adjust']
             embed.add_field(name="Total", value="`{}{}`".format(num_format_coin(total_balance), TOKEN_NAME), inline=False)
             embed.set_footer(text=f"Minimum {str(config.moon.min_move_deposit)}{config.moon.ticker} in deposit is required to (auto)transfer to **Spendable**.")
-            await ctx.message.add_reaction(EMOJI_OK_HAND)
-            msg = await ctx.send(embed=embed)
-            await msg.add_reaction(EMOJI_OK_BOX)
+            try:
+                # Try DM first, if failed, send to public
+                msg = await ctx.author.send(embed=embed)
+                await ctx.message.add_reaction(EMOJI_OK_HAND)
+            except (discord.Forbidden, discord.errors.Forbidden) as e:
+                traceback.print_exc(file=sys.stdout)
+                try:
+                    msg = await ctx.send(embed=embed)
+                    await msg.add_reaction(EMOJI_OK_BOX)
+                    await ctx.message.add_reaction(EMOJI_OK_HAND)
+                except (discord.Forbidden, discord.errors.Forbidden) as e:
+                    traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
+                    await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)            
             return
         except Exception as e:
             await ctx.message.add_reaction(EMOJI_ERROR)
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
     return
 
 
@@ -1758,6 +1858,7 @@ async def botbalance(ctx, member: discord.Member):
             await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
             await ctx.message.add_reaction(EMOJI_ERROR)
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
     else:
         await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -1805,6 +1906,7 @@ async def mbalance(ctx):
             await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
             await ctx.message.add_reaction(EMOJI_ERROR)
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
     return
 
 
@@ -1824,8 +1926,21 @@ async def deposit(ctx):
             embed.add_field(name="Withdraw Address", value="`{}`".format(wallet['user_wallet_address']), inline=False)
         elif 'user_wallet_address' in wallet and wallet['user_wallet_address'] and isinstance(ctx.channel, discord.DMChannel) == False:
             embed.add_field(name="Withdraw Address", value="`(Only in DM)`", inline=False)
-        msg = await ctx.send(embed=embed)
-        await msg.add_reaction(EMOJI_OK_BOX)
+        try:
+            # Try DM first
+            msg = await ctx.author.send(embed=embed)
+            await ctx.message.add_reaction(EMOJI_OK_HAND)
+        except (discord.Forbidden, discord.errors.Forbidden) as e:
+            traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
+            try:
+                msg = await ctx.send(embed=embed)
+                await msg.add_reaction(EMOJI_OK_BOX)
+                await ctx.message.add_reaction(EMOJI_OK_HAND)
+            except (discord.Forbidden, discord.errors.Forbidden) as e:
+                traceback.print_exc(file=sys.stdout)
+                await logchanbot(traceback.format_exc())
+                await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
     else:
         await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -1934,6 +2049,7 @@ async def register(ctx, wallet_address: str):
             await msg.add_reaction(EMOJI_OK_BOX)
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         return
 
 
@@ -2018,6 +2134,7 @@ async def withdraw(ctx, amount: str):
             SendTx = await store.sql_external_erc_single(str(ctx.author.id), CoinAddress, amount, TOKEN_NAME, 'DISCORD')
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         TX_IN_PROCESS.remove(ctx.message.author.id)
     else:
         # reject and tell to wait
@@ -2122,6 +2239,7 @@ async def _tip(ctx, amount, coin: str, if_guild: bool=False):
         tips = await store.sql_mv_erc_multiple(id_tipper, memids, amount, TOKEN_NAME, "TIPS", token_info['contract'])
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
     if tips:
         tipAmount = num_format_coin(TotalAmount)
         amountDiv_str = num_format_coin(amount)
@@ -2212,9 +2330,11 @@ async def _tip_talker(ctx, amount, list_talker, if_guild: bool=False, coin: str 
                     list_receivers.append(str(member_id))
                 except Exception as e:
                     traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
                     print('Failed creating wallet for tip talk for userid: {}'.format(member_id))
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
 
     # Check number of receivers.
     if len(list_receivers) > config.tipallMax:
@@ -2266,6 +2386,7 @@ async def _tip_talker(ctx, amount, list_talker, if_guild: bool=False, coin: str 
         tip = await store.sql_mv_erc_multiple(id_tipper, list_receivers, amount, TOKEN_NAME, "TIPS", token_info['contract'])
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
     # remove queue from tip
     if int(id_tipper) in TX_IN_PROCESS:
@@ -2323,6 +2444,7 @@ async def add_msg_redis(msg: str, delete_temp: bool = False):
                 redis_conn.lpush(key, msg)
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
 
 async def store_message_list():
@@ -2339,6 +2461,7 @@ async def store_message_list():
                     num_add = await store.sql_add_messages(temp_msg_list)
                 except Exception as e:
                     traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
                 if num_add and num_add > 0:
                     redis_conn.delete(key)
                 else:
@@ -2346,6 +2469,7 @@ async def store_message_list():
                     print(f"MOONTIPBOT:MSG: Failed delete {key}")
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
+            await logchanbot(traceback.format_exc())
         await asyncio.sleep(interval_msg_list)
 
 
@@ -2395,6 +2519,7 @@ async def notify_new_confirmed_spendable():
                             is_notify_failed = True
                         except Exception as e:
                             traceback.print_exc(file=sys.stdout)
+                            await logchanbot(traceback.format_exc())
                         update_status = await store.sql_updating_pending_move_deposit(True, is_notify_failed, each_notify['txn'])
         except Exception as e:
             print(e)
