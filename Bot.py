@@ -840,6 +840,11 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
 @commands.has_permissions(manage_channels=True)
 async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
     global TX_IN_PROCESS
+
+    if isinstance(ctx.channel, discord.DMChannel):
+        await ctx.send(f'{EMOJI_RED_NO} This command can not be in private.')
+        return
+
     # Check if tx in progress
     if ctx.guild.id in TX_IN_PROCESS:
         await ctx.message.add_reaction(EMOJI_HOURGLASS_NOT_DONE)
@@ -896,10 +901,6 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
     except ValueError:
         await ctx.message.add_reaction(EMOJI_ERROR)
         await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid amount.')
-        return
-
-    if isinstance(ctx.channel, discord.DMChannel):
-        await ctx.send(f'{EMOJI_RED_NO} This command can not be in private.')
         return
 
     notifyList = await store.sql_get_tipnotify()
@@ -1928,7 +1929,8 @@ async def mbalance(ctx):
 
 
 @bot.command(pass_context=True, name='deposit', help=bot_help_deposit)
-async def deposit(ctx):
+async def deposit(ctx, plain: str='embed'):
+    prefix = await get_guild_prefix(ctx)
     wallet = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
     if wallet is None:
         w = await create_address_eth()
@@ -1936,22 +1938,30 @@ async def deposit(ctx):
         wallet = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
     embed = discord.Embed(title=f'Deposit for {ctx.author.name}#{ctx.author.discriminator}', description='This bot\'s still under testing!', timestamp=datetime.utcnow(), colour=7047495)
     embed.set_author(name=bot.user.name, icon_url=bot.user.avatar_url)
+                    
     if wallet['balance_wallet_address']:
-        await ctx.message.add_reaction(EMOJI_OK_HAND)
+        plain_msg = '{}#{} Your deposit address: ```{}```'.format(ctx.author.name, ctx.author.discriminator, wallet['balance_wallet_address'])
         embed.add_field(name="Deposit Address", value="`{}`".format(wallet['balance_wallet_address']), inline=False)
         if 'user_wallet_address' in wallet and wallet['user_wallet_address'] and isinstance(ctx.channel, discord.DMChannel) == True:
             embed.add_field(name="Withdraw Address", value="`{}`".format(wallet['user_wallet_address']), inline=False)
         elif 'user_wallet_address' in wallet and wallet['user_wallet_address'] and isinstance(ctx.channel, discord.DMChannel) == False:
             embed.add_field(name="Withdraw Address", value="`(Only in DM)`", inline=False)
+        embed.set_footer(text=f"Use: {prefix}deposit plain (for plain text)")
         try:
             # Try DM first
-            msg = await ctx.author.send(embed=embed)
+            if plain and plain.lower() == 'plain' or plain.lower() == 'text':
+                msg = await ctx.author.send(plain_msg)
+            else:
+                msg = await ctx.author.send(embed=embed)
             await ctx.message.add_reaction(EMOJI_OK_HAND)
         except (discord.Forbidden, discord.errors.Forbidden) as e:
             traceback.print_exc(file=sys.stdout)
             await logchanbot(traceback.format_exc())
             try:
-                msg = await ctx.send(embed=embed)
+                if plain.lower() == 'plain' or plain.lower() == 'text':
+                    msg = await ctx.author.send(plain_msg)
+                else:
+                    msg = await ctx.send(embed=embed)
                 await msg.add_reaction(EMOJI_OK_BOX)
                 await ctx.message.add_reaction(EMOJI_OK_HAND)
             except (discord.Forbidden, discord.errors.Forbidden) as e:
@@ -1965,7 +1975,13 @@ async def deposit(ctx):
 
 
 @bot.command(pass_context=True, name='mdeposit', help='Deposit to Guild')
-async def mdeposit(ctx):
+async def mdeposit(ctx, plain: str='embed'):
+    if isinstance(ctx.channel, discord.DMChannel):
+        await ctx.message.add_reaction(EMOJI_ERROR) 
+        await ctx.send(f'{ctx.author.mention} This command can not be in private.')
+        return
+
+    prefix = await get_guild_prefix(ctx)
     wallet = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME, 'DISCORD')
     if wallet is None:
         w = await create_address_eth()
@@ -1974,9 +1990,14 @@ async def mdeposit(ctx):
     embed = discord.Embed(title=f'Deposit for Guild {ctx.guild.name} / {ctx.guild.id}', description='This bot\'s still under testing!', timestamp=datetime.utcnow(), colour=7047495)
     embed.set_author(name=bot.user.name, icon_url=bot.user.avatar_url)
     if wallet['balance_wallet_address']:
-        await ctx.message.add_reaction(EMOJI_OK_HAND)
+        plain_msg = 'Guild {}/{}\'s deposit address: ```{}```'.format(ctx.guild.name, ctx.guild.id, wallet['balance_wallet_address'])
         embed.add_field(name="Guild Deposit Address", value="`{}`".format(wallet['balance_wallet_address']), inline=False)
-        msg = await ctx.send(embed=embed)
+        embed.set_footer(text=f"Use: {prefix}deposit plain (for plain text)")
+        if plain and plain.lower() == 'plain' or plain.lower() == 'text':
+            msg = await ctx.send(plain_msg)
+        else:
+            msg = await ctx.send(embed=embed)
+        await ctx.message.add_reaction(EMOJI_OK_HAND)
         await msg.add_reaction(EMOJI_OK_BOX)
     else:
         await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Internal Error')
