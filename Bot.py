@@ -526,7 +526,7 @@ async def randtip(ctx, amount: str, *, rand_option: str=None):
     if user_from is None:
         user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
     if amount > MaxTX:
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -690,7 +690,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
     if user_from is None:
         user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
     if amount > MaxTX:
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -763,7 +763,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
 
     # re-check balance
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
     if amount > actual_balance:
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -912,7 +912,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
     if user_from is None:
         user_from = await store.sql_register_user(str(ctx.guild.id), TOKEN_NAME, 'DISCORD')
     userdata_balance = await store.sql_user_balance(str(ctx.guild.id), TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
     if amount > MaxTX:
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -992,7 +992,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
     # TODO, add one by one
     # re-check balance
     userdata_balance = await store.sql_user_balance(str(ctx.guild.id), TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
     if amount > actual_balance:
         await ctx.message.add_reaction(EMOJI_ERROR)
@@ -1303,25 +1303,28 @@ async def tip(ctx, amount: str, *args):
         user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
         user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
     if amount < MinTx:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
-                       f'{num_format_coin(MinTx)} '
-                       f'{TOKEN_NAME}.')
+        await ctx.author.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
+                              f'{num_format_coin(MinTx)} '
+                              f'{TOKEN_NAME}.')
         return
     elif amount > MaxTX:
         await ctx.message.add_reaction(EMOJI_ERROR)
-        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
-                       f'{num_format_coin(MaxTX)} '
-                       f'{TOKEN_NAME}.')
+        await ctx.author.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be bigger than '
+                              f'{num_format_coin(MaxTX)} '
+                              f'{TOKEN_NAME}.')
         return
     elif amount > actual_balance:
-            await ctx.message.add_reaction(EMOJI_ERROR)
-            await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send tip of '
-                            f'{num_format_coin(amount)} '
-                            f'{TOKEN_NAME} to {member.name}#{member.discriminator}.')
-            return
+        print('amount: {}'.format(amount))
+        print('actual_balance: {}'.format(actual_balance))
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.author.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send tip of '
+                              f'{num_format_coin(amount)} '
+                              f'{TOKEN_NAME} to {member.name}#{member.discriminator}.')
+        return
     if ctx.message.author.id not in TX_IN_PROCESS:
         TX_IN_PROCESS.append(ctx.message.author.id)
         try:
@@ -1332,7 +1335,8 @@ async def tip(ctx, amount: str, *args):
         TX_IN_PROCESS.remove(ctx.message.author.id)
     else:
         # reject and tell to wait
-        msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} You have another tx in process. Please wait it to finish. ')
+        await ctx.message.add_reaction(EMOJI_HOURGLASS_NOT_DONE)
+        msg = await ctx.author.send(f'{EMOJI_RED_NO} {ctx.author.mention} You have another tx in process. Please wait it to finish. ')
         await msg.add_reaction(EMOJI_OK_BOX)
         return
     
@@ -1604,7 +1608,7 @@ async def gtip(ctx, amount: str, *args):
         user_from = await store.sql_register_user(str(ctx.guild.id), TOKEN_NAME, w, 'DISCORD')
         user_from = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME)
     userdata_balance = await store.sql_user_balance(str(ctx.guild.id), TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
     if amount < MinTx:
         await ctx.message.add_reaction(EMOJI_ERROR)
         await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
@@ -1691,7 +1695,7 @@ async def tipall(ctx, amount: str, user: str='ONLINE'):
         user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
         user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
     if amount < MinTx:
         await ctx.message.add_reaction(EMOJI_ERROR)
         await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
@@ -2126,7 +2130,7 @@ async def withdraw(ctx, amount: str):
 
     user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
     # If balance 0, no need to check anything
     if actual_balance <= 0:
@@ -2209,7 +2213,7 @@ async def _tip(ctx, amount, coin: str, if_guild: bool=False):
         user_from = await store.sql_get_userwallet(id_tipper, TOKEN_NAME)
 
     userdata_balance = await store.sql_user_balance(id_tipper, TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
     if amount < MinTx:
         await ctx.message.add_reaction(EMOJI_ERROR)
         msg = await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Transactions cannot be smaller than '
@@ -2334,7 +2338,7 @@ async def _tip_talker(ctx, amount, list_talker, if_guild: bool=False, coin: str 
         user_from = await store.sql_get_userwallet(id_tipper, TOKEN_NAME)
 
     userdata_balance = await store.sql_user_balance(id_tipper, TOKEN_NAME)
-    actual_balance = user_from['real_actual_balance'] + userdata_balance['Adjust']
+    actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
     if amount > MaxTX:
         await ctx.message.add_reaction(EMOJI_ERROR)

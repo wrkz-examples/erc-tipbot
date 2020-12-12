@@ -257,11 +257,11 @@ async def sql_user_balance(userID: str, coin: str, user_server: str = 'DISCORD')
 
             balance = {}
             balance['Adjust'] = 0
-            balance['Expense'] = float(Expense) if Expense else 0
-            balance['Income'] = float(Income) if Income else 0
-            balance['SendingOut'] = float(SendingOut) if SendingOut else 0
-            balance['Deposit'] = float(Deposit) if Deposit else 0
-            balance['Adjust'] = balance['Income'] - balance['SendingOut'] - balance['Expense'] + balance['Deposit']
+            balance['Expense'] = float("%.3f" % Expense) if Expense else 0
+            balance['Income'] = float("%.3f" % Income) if Income else 0
+            balance['SendingOut'] = float("%.3f" % SendingOut) if SendingOut else 0
+            balance['Deposit'] = float("%.3f" % Deposit) if Deposit else 0
+            balance['Adjust'] = float("%.3f" % (balance['Income'] - balance['SendingOut'] - balance['Expense'] + balance['Deposit']))
             return balance
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
