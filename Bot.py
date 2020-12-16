@@ -38,6 +38,7 @@ logging.basicConfig(level=logging.INFO)
 
 TX_IN_PROCESS = []
 TOKEN_NAME = config.moon.ticker.upper()
+MOD_LIST = config.discord.mod_list.split(",")
 
 EMOJI_ERROR = "\u274C"
 EMOJI_OK_BOX = "\U0001F197"
@@ -54,6 +55,7 @@ EMOJI_HOURGLASS_NOT_DONE = "\u23F3"
 EMOJI_PARTY = "\U0001F389"
 EMOJI_SPEAK = "\U0001F4AC"
 EMOJI_INFORMATION = "\u2139"
+EMOJI_WARNING = "\u26A1"
 
 NOTIFICATION_OFF_CMD = 'Type: `.notifytip off` to turn off this DM notification.'
 
@@ -181,12 +183,12 @@ async def on_message(message):
 
 @bot.event
 async def on_reaction_add(reaction, user):
-    # If bot re-act, ignore.
+    # If bot react, ignore.
     if user.id == bot.user.id:
         return
     # If other people beside bot react.
     else:
-        # If re-action is OK box and message author is bot itself
+        # If reaction is OK box and message author is bot itself
         if reaction.emoji == EMOJI_OK_BOX and reaction.message.author.id == bot.user.id:
             # do not delete some embed message
             if reaction.message.embeds and len(reaction.message.embeds) > 0:
@@ -245,20 +247,19 @@ async def on_raw_reaction_add(payload):
 
 @bot.command(help='Check pending things', hidden = True)
 async def pending(ctx):
-    if ctx.author.id != config.discord.ownerID:
-        return
-
-    if isinstance(ctx.channel, discord.DMChannel) == False:
-        await ctx.message.add_reaction(EMOJI_ERROR) 
-        await ctx.send(f'{ctx.author.mention} This command can not be in public.')
+    if str(ctx.author.id) not in [str(each) for each in MOD_LIST]:
         return
 
     ts = datetime.utcnow()
     embed = discord.Embed(title='Pending Actions', timestamp=ts)
     embed.add_field(name="Pending Tx", value=str(len(TX_IN_PROCESS)), inline=True)
+    if len(TX_IN_PROCESS) > 0:
+        string_ints = [str(num) for num in TX_IN_PROCESS]
+        list_pending = '{' + ', '.join(string_ints) + '}'
+        embed.add_field(name="List Pending By", value=list_pending, inline=True)
     embed.set_footer(text=f"Pending requested by {ctx.message.author.name}#{ctx.message.author.discriminator}")
     try:
-        msg = await ctx.send(embed=embed)
+        msg = await ctx.author.send(embed=embed)
         await msg.add_reaction(EMOJI_OK_BOX)
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
@@ -269,22 +270,18 @@ async def pending(ctx):
 @bot.command(help='Clear TX_IN_PROCESS', hidden = True)
 async def cleartx(ctx):
     global TX_IN_PROCESS
-    if ctx.author.id != config.discord.ownerID:
-        return
-
-    if isinstance(ctx.channel, discord.DMChannel) == False:
-        await ctx.message.add_reaction(EMOJI_ERROR) 
-        await ctx.send(f'{ctx.author.mention} This command can not be in public.')
+    if str(ctx.author.id) not in [str(each) for each in MOD_LIST]:
         return
 
     if len(TX_IN_PROCESS) == 0:
-        await ctx.message.author.send(f'{ctx.author.mention} Nothing in tx pending to clear.')
+        await ctx.author.send(f'{ctx.author.mention} Nothing in tx pending to clear.')
     else:
         try:
             string_ints = [str(num) for num in TX_IN_PROCESS]
             list_pending = '{' + ', '.join(string_ints) + '}'
             await ctx.message.add_reaction(EMOJI_WARNING)
-            await ctx.message.author.send(f'{ctx.author.mention} Clearing {str(len(TX_IN_PROCESS))} {list_pending} in pending...')
+            await logchanbot(f'{ctx.author.mention} Clearing {str(len(TX_IN_PROCESS))} {list_pending} in pending...')
+            await ctx.author.send(f'Clearing {str(len(TX_IN_PROCESS))} {list_pending} in pending...')
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             await logchanbot(traceback.format_exc())
@@ -616,7 +613,7 @@ async def randtip(ctx, amount: str, *, rand_option: str=None):
         return
 
 
-@bot.command(pass_context=True, help="Spread free tip by user re-acted")
+@bot.command(pass_context=True, help="Spread free tip by user reacting with emoji")
 async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
     global TX_IN_PROCESS
     # Check if tx in progress
@@ -715,7 +712,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
     attend_list_names = []
     ts = timestamp=datetime.utcnow()
     try:
-        embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+        embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
         msg = await ctx.send(embed=embed)
         await msg.add_reaction(EMOJI_PARTY)
         if comment and len(comment) > 0:
@@ -744,6 +741,8 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                     embed.add_field(name="Comment", value=comment, inline=False)
                 embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
                 await msg.edit(embed=embed)
+                if ctx.author.id in TX_IN_PROCESS:
+                    TX_IN_PROCESS.remove(ctx.message.author.id)
                 await msg.add_reaction(EMOJI_OK_BOX)
                 return
             break
@@ -751,7 +750,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         if str(reaction.emoji) == EMOJI_PARTY and user.id not in attend_list_id:
             attend_list_id.append(user.id)
             attend_list_names.append('{}#{}'.format(user.name, user.discriminator))
-            embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+            embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
             if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
             embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
@@ -770,6 +769,8 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to do a free tip of '
                        f'{num_format_coin(amount)} '
                        f'{TOKEN_NAME}.')
+        if ctx.author.id in TX_IN_PROCESS:
+            TX_IN_PROCESS.remove(ctx.message.author.id)
         return
     # end of re-check balance
 
@@ -820,7 +821,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
             await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
         # Edit embed
         try:
-            embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+            embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
             if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
             embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
@@ -836,7 +837,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
     return
 
 
-@bot.command(pass_context=True, name='gfreetip', aliases=['mfreetip', 'guildfreetip'], help="Spread gruild free tip by user re-acted")
+@bot.command(pass_context=True, name='gfreetip', aliases=['mfreetip', 'guildfreetip'], help="Spread guild free tip by reacting with emoji")
 @commands.has_permissions(manage_channels=True)
 async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
     global TX_IN_PROCESS
@@ -937,7 +938,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
     attend_list_names = []
     ts = timestamp=datetime.utcnow()
     try:
-        embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+        embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
         msg = await ctx.send(embed=embed)
         await msg.add_reaction(EMOJI_PARTY)
         if comment and len(comment) > 0:
@@ -965,6 +966,8 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
                         embed.add_field(name="Comment", value=comment, inline=False)
                 embed.set_footer(text=f"Guild free tip by {ctx.guild.name} / issued by {ctx.author.name}#{ctx.author.discriminator}, and no one collected!")
                 await msg.edit(embed=embed)
+                if ctx.guild.id in TX_IN_PROCESS:
+                    TX_IN_PROCESS.remove(ctx.guild.id)
                 await msg.add_reaction(EMOJI_OK_BOX)
                 return
             break
@@ -972,7 +975,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         if str(reaction.emoji) == EMOJI_PARTY and user.id not in attend_list_id:
             attend_list_id.append(user.id)
             attend_list_names.append('{}#{}'.format(user.name, user.discriminator))
-            embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+            embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
             if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
             try:
@@ -999,6 +1002,8 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to do a free tip of '
                        f'{num_format_coin(amount)} '
                        f'{TOKEN_NAME}.')
+        if ctx.guild.id in TX_IN_PROCESS:
+            TX_IN_PROCESS.remove(ctx.guild.id)
         return
     # end of re-check balance
 
@@ -1049,7 +1054,7 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
             await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
         # Edit embed
         try:
-            embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Re-act {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+            embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
             if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
             embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
@@ -1318,8 +1323,6 @@ async def tip(ctx, amount: str, *args):
                               f'{TOKEN_NAME}.')
         return
     elif amount > actual_balance:
-        print('amount: {}'.format(amount))
-        print('actual_balance: {}'.format(actual_balance))
         await ctx.message.add_reaction(EMOJI_ERROR)
         await ctx.author.send(f'{EMOJI_RED_NO} {ctx.author.mention} Insufficient balance to send tip of '
                               f'{num_format_coin(amount)} '
