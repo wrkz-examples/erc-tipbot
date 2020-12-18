@@ -521,7 +521,8 @@ async def randtip(ctx, amount: str, *, rand_option: str=None):
 
     user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
     if user_from is None:
-        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+        w = await create_address_eth()
+        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
     actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
@@ -558,7 +559,8 @@ async def randtip(ctx, amount: str, *, rand_option: str=None):
     tip = None
     user_to = await store.sql_get_userwallet(str(rand_user.id), TOKEN_NAME)
     if user_to is None:
-        userregister = await store.sql_register_user(str(rand_user.id), TOKEN_NAME, 'DISCORD')
+        w = await create_address_eth()
+        userregister = await store.sql_register_user(str(rand_user.id), TOKEN_NAME, w, 'DISCORD')
         user_to = await store.sql_get_userwallet(str(rand_user.id), TOKEN_NAME)
 
     try:
@@ -685,7 +687,8 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
 
     user_from = await store.sql_get_userwallet(str(ctx.message.author.id), TOKEN_NAME)
     if user_from is None:
-        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, 'DISCORD')
+        w = await create_address_eth()
+        user_from = await store.sql_register_user(str(ctx.message.author.id), TOKEN_NAME, w, 'DISCORD')
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
     actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
@@ -911,7 +914,8 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
 
     user_from = await store.sql_get_userwallet(str(ctx.guild.id), TOKEN_NAME)
     if user_from is None:
-        user_from = await store.sql_register_user(str(ctx.guild.id), TOKEN_NAME, 'DISCORD')
+        w = await create_address_eth()
+        user_from = await store.sql_register_user(str(ctx.guild.id), TOKEN_NAME, w, 'DISCORD')
     userdata_balance = await store.sql_user_balance(str(ctx.guild.id), TOKEN_NAME)
     actual_balance = float(user_from['real_actual_balance']) + float(userdata_balance['Adjust'])
 
@@ -2369,7 +2373,8 @@ async def _tip_talker(ctx, amount, list_talker, if_guild: bool=False, coin: str 
             if member and member in ctx.guild.members and ctx.message.author.id != member.id:
                 user_to = await store.sql_get_userwallet(str(member_id), TOKEN_NAME)
                 if user_to is None:
-                    userregister = await store.sql_register_user(str(member_id), TOKEN_NAME, 'DISCORD')
+                    w = await create_address_eth()
+                    userregister = await store.sql_register_user(str(member_id), TOKEN_NAME, w, 'DISCORD')
                     user_to = await store.sql_get_userwallet(str(member_id), TOKEN_NAME)
                 try:
                     list_receivers.append(str(member_id))
