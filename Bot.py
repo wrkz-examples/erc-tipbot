@@ -715,27 +715,22 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
     ts = datetime.utcnow()
     try:
         embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+        embed.add_field(name="Individual Tip Amount", value=f"{num_format_coin(amount)}{TOKEN_NAME}", inline=True)
+        embed.add_field(name="Num. Attendees", value="**0** members", inline=True)
+        if comment and len(comment) > 0:
+            embed.add_field(name="Comment", value=comment, inline=True)
+        embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
         msg = await ctx.send(embed=embed)
         await msg.add_reaction(EMOJI_PARTY)
-        if comment and len(comment) > 0:
-            embed.add_field(name="Comment", value=comment, inline=False)
-        embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, timeout: {seconds_str(duration_s)}")
-        await msg.edit(embed=embed)
     except (discord.errors.NotFound, discord.errors.Forbidden) as e:
         await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
         return
-
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
+            
     if ctx.author.id not in TX_IN_PROCESS:
         TX_IN_PROCESS.append(ctx.author.id)
-
-
-    embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
-    embed.add_field(name="Attendees", value="", inline=False)
-    embed.add_field(name="Individual Tip Amount", value=f"{num_format_coin(amount)}{TOKEN_NAME}", inline=True)
-    embed.add_field(name="Num. Attendees", value="**0** members", inline=True)
-    if comment and len(comment) > 0:
-        embed.add_field(name="Comment", value=comment, inline=True)
-    embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
 
     prev = []
     add_index = 0
@@ -750,7 +745,6 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                 # Find reaction we're looking for
                 if str(r.emoji) == EMOJI_PARTY:
                     # Get list of Users that reacted & filter bots out
-
                     attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
 
                     # Check if there's been a change, otherwise delay & recheck
@@ -758,21 +752,18 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                         await asyncio.sleep(0.25)
                         break
 
-                    attend_list_names = " | ".join([u.name + "#" + u.discriminator for u in attend_list])
-                    if len(attend_list_names) <= 1024:
-                        embed.set_field_at(0, name='Attendees', value=attend_list_names, inline=False)
-                    else:
-                        import textwrap
-                        fields = textwrap.wrap(attend_list_names, width=1024)  # Wrap message before max len of field of 1024
-                        add_index = len(fields) - len(_msg.embeds[0].fields)
-                        if add_index > 0:
-                            for _ in range(add_index):
-                                embed.insert_field_at(0, name='TMP', value="TMP")
-                        for i, l in enumerate(fields, start=0):
-                            embed.set_field_at(i, name=f"Attendees (pt. {i+1})", value=l, inline=False)
-
-                    embed.set_field_at(1+add_index, name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
-                    embed.set_field_at(2+add_index, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+                    attend_list_names = " | ".join([str(u.name) + "#" + str(u.discriminator) for u in attend_list])
+                    embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+                    if comment and len(comment) > 0:
+                        embed.add_field(name="Comment", value=comment, inline=False)
+                    if len(attend_list_names) >= 1000: attend_list_names = attend_list_names[:1000]
+                    try:
+                        if len(attend_list) > 0:
+                            embed.add_field(name='Attendees', value=attend_list_names, inline=False)
+                            embed.add_field(name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
+                            embed.add_field(name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+                    except Exception as e:
+                        traceback.print_exc(file=sys.stdout)
                     embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(int(time_left))}")
                     await _msg.edit(embed=embed)
                     prev = attend_list
@@ -790,7 +781,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
         await msg.edit(embed=embed)
         if ctx.author.id in TX_IN_PROCESS:
-            TX_IN_PROCESS.remove(ctx.message.author.id)
+            TX_IN_PROCESS.remove(ctx.author.id)
         await msg.add_reaction(EMOJI_OK_BOX)
         return
 
@@ -860,8 +851,15 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
             embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
             if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
-            embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
-            embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, completed! Collected by {len(attend_list_id)} member(s)")
+            if len(attend_list_names) >= 1000: attend_list_names = attend_list_names[:1000]
+            try:
+                if len(attend_list) > 0:
+                    embed.add_field(name='Attendees', value=attend_list_names, inline=False)
+                    embed.add_field(name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
+                    embed.add_field(name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+            except Exception as e:
+                traceback.print_exc(file=sys.stdout)
+            embed.set_footer(text=f"Completed! Collected by {len(attend_list_id)} member(s)")
             await msg.edit(embed=embed)
             await msg.add_reaction(EMOJI_OK_BOX)
         except Exception as e:
@@ -973,70 +971,63 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
 
     attend_list = []
     ts = datetime.utcnow()
-
     try:
         embed = discord.Embed(title=f"Guild Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+        embed.add_field(name="Individual Tip Amount", value=f"{num_format_coin(amount)}{TOKEN_NAME}", inline=True)
+        embed.add_field(name="Num. Attendees", value="**0** members", inline=True)
+        if comment and len(comment) > 0:
+            embed.add_field(name="Comment", value=comment, inline=True)
+        embed.set_footer(text=f"Guild Free Tip by in {ctx.guild.name} / issued by {ctx.message.author.name}#{ctx.message.author.discriminator}, timeout: {seconds_str(duration_s)}")
         msg = await ctx.send(embed=embed)
         await msg.add_reaction(EMOJI_PARTY)
-        if comment and len(comment) > 0:
-            embed.add_field(name="Comment", value=comment, inline=False)
-        embed.set_footer(text=f"Guild Free Tip by in {ctx.guild.name} / issued by {ctx.message.author.name}#{ctx.message.author.discriminator}, timeout: {seconds_str(duration_s)}")
-        await msg.edit(embed=embed)
     except (discord.errors.NotFound, discord.errors.Forbidden) as e:
         await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
         return
-
-    prev = []
-    add_index = 0
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
     if ctx.guild.id not in TX_IN_PROCESS:
         TX_IN_PROCESS.append(ctx.guild.id)
 
-    start_time = int(time.time())
-    while True:
+    prev = []
+    add_index = 0
+    start_time = time.time()
+    time_left = duration_s
+    while time_left > 0:
         # Retrieve new reactions
         try:
-            _msg = await ctx.fetch_message(msg.id)
+            _msg: discord.Message = await ctx.fetch_message(msg.id)
+
             for r in _msg.reactions:
                 # Find reaction we're looking for
                 if str(r.emoji) == EMOJI_PARTY:
                     # Get list of Users that reacted & filter bots out
-                    attend_list = await r.users().flatten()
+                    attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
 
                     # Check if there's been a change, otherwise delay & recheck
                     if set(attend_list) == set(prev) or len(attend_list) == 0:
-                        await asyncio.sleep(0.2)
-                        duration_s -= int(time.time()) - start_time
-                        if duration_s <= 1:
-                            break
-                        continue
+                        await asyncio.sleep(0.25)
+                        break
 
-                    attend_num = len([u for u in attend_list if not u.bot and u != ctx.message.author])
-                    attend_list_names = " | ".join(["{}#{}".format(u.name, u.discriminator) for u in attend_list if not u.bot and u != ctx.message.author])
-                    if 0 < len(attend_list_names) <= 1024:
-                        embed.set_field_at(0, name='Attendees', value=attend_list_names, inline=False)
-                    else:
-                        import textwrap
-                        fields = textwrap.wrap(attend_list_names, width=1024)  # Wrap message before max len of field of 1024
-                        add_index = len(fields) - len(_msg.embeds[0].fields)
-                        if add_index > 0 :
-                            for _ in range(add_index):
-                                embed.insert_field_at(0, name='TMP', value="TMP")
-                        for i, l in enumerate(fields, start=0):
-                            embed.set_field_at(i, name=f"Attendees (pt. {i+1})", value=l, inline=False)
+                    attend_list_names = " | ".join([str(u.name) + "#" + str(u.discriminator) for u in attend_list])
+                    if len(attend_list_names) >= 1000: attend_list_names = attend_list_names[:1000]
+                    embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+                    if comment and len(comment) > 0:
+                        embed.add_field(name="Comment", value=comment, inline=False)
                     try:
-                        if attend_num > 0:
-                            embed.set_field_at(1+add_index, name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
-                            embed.set_field_at(2+add_index, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+                        if len(attend_list) > 0:
+                            embed.add_field(name='Attendees', value=attend_list_names, inline=False)
+                            embed.add_field(name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
+                            embed.add_field(name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
                     except Exception as e:
                         traceback.print_exc(file=sys.stdout)
                     embed.set_footer(text=f"Guild Free Tip by in {ctx.guild.name} / issued by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
                     await _msg.edit(embed=embed)
                     prev = attend_list
 
-            duration_s -= int(time.time()) - start_time
-            if duration_s <= 1:
-                break
+            time_left = duration_s - (time.time() - start_time)
+
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             await logchanbot(traceback.format_exc())
@@ -1047,8 +1038,8 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
             embed.add_field(name="Comment", value=comment, inline=False)
         embed.set_footer(text=f"Guild Free tip in {ctx.guild.name} / issued by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
         await msg.edit(embed=embed)
-        if ctx.author.id in TX_IN_PROCESS:
-            TX_IN_PROCESS.remove(ctx.message.author.id)
+        if ctx.guild.id in TX_IN_PROCESS:
+            TX_IN_PROCESS.remove(ctx.guild.id)
         await msg.add_reaction(EMOJI_OK_BOX)
         return
 
@@ -1116,11 +1107,18 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
             await store.sql_toggle_tipnotify(str(ctx.message.author.id), "OFF")
         # Edit embed
         try:
-            embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+            embed = discord.Embed(title=f"Guild Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
             if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
-            embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
-            embed.set_footer(text=f"Guild free tip by {ctx.guild.name} / issued by {ctx.author.name}#{ctx.author.discriminator}, completed! Collected by {len(attend_list_id)} member(s)")
+            if len(attend_list_names) >= 1000: attend_list_names = attend_list_names[:1000]
+            try:
+                if len(attend_list) > 0:
+                    embed.add_field(name='Attendees', value=attend_list_names, inline=False)
+                    embed.add_field(name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
+                    embed.add_field(name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+            except Exception as e:
+                traceback.print_exc(file=sys.stdout)
+            embed.set_footer(text=f"Completed! Collected by {len(attend_list_id)} member(s)")
             await msg.edit(embed=embed)
             await msg.add_reaction(EMOJI_OK_BOX)
         except Exception as e:
