@@ -236,13 +236,18 @@ async def on_raw_reaction_add(payload):
         member = bot.get_user(id=user_id)
         if emoji_partial in [EMOJI_OK_BOX] and message.author.id == bot.user.id \
             and author != member and message:
-            # Delete message
+            # do not delete some embed message
+            if message.embeds and len(message.embeds) > 0:
+                try:
+                    title = message.embeds[0].title
+                    if title and 'FREE TIP' in str(title.upper()):
+                        return
+                except Exception as e:
+                    pass
             try:
-                await message.delete()
-                return
-            except discord.errors.NotFound as e:
-                # No message found
-                return
+                await reaction.message.delete()
+            except Exception as e:
+                pass
 
 
 @bot.command(help='Check pending things', hidden = True)
@@ -753,7 +758,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                         break
 
                     attend_list_names = " | ".join([str(u.name) + "#" + str(u.discriminator) for u in attend_list])
-                    embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+                    embed = discord.Embed(title=f"Free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
                     if comment and len(comment) > 0:
                         embed.add_field(name="Comment", value=comment, inline=False)
                     if len(attend_list_names) >= 1000: attend_list_names = attend_list_names[:1000]
@@ -779,7 +784,10 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         if comment and len(comment) > 0:
             embed.add_field(name="Comment", value=comment, inline=False)
         embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
-        await msg.edit(embed=embed)
+        try:
+            await msg.edit(embed=embed)
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
         if ctx.author.id in TX_IN_PROCESS:
             TX_IN_PROCESS.remove(ctx.author.id)
         await msg.add_reaction(EMOJI_OK_BOX)
@@ -797,7 +805,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                        f'{num_format_coin(amount)} '
                        f'{TOKEN_NAME}.')
         if ctx.author.id in TX_IN_PROCESS:
-            TX_IN_PROCESS.remove(ctx.message.author.id)
+            TX_IN_PROCESS.remove(ctx.author.id)
         return
     # end of re-check balance
 
@@ -812,7 +820,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         traceback.print_exc(file=sys.stdout)
         await logchanbot(traceback.format_exc())
     if ctx.author.id in TX_IN_PROCESS:
-        TX_IN_PROCESS.remove(ctx.message.author.id)
+        TX_IN_PROCESS.remove(ctx.author.id)
 
     if tips:
         tipAmount = num_format_coin(amount)
@@ -1037,7 +1045,10 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         if comment and len(comment) > 0:
             embed.add_field(name="Comment", value=comment, inline=False)
         embed.set_footer(text=f"Guild Free tip in {ctx.guild.name} / issued by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
-        await msg.edit(embed=embed)
+        try:
+            await msg.edit(embed=embed)
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
         if ctx.guild.id in TX_IN_PROCESS:
             TX_IN_PROCESS.remove(ctx.guild.id)
         await msg.add_reaction(EMOJI_OK_BOX)
