@@ -753,6 +753,21 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         if str(reaction.emoji) == EMOJI_PARTY and user.id not in attend_list_id:
             attend_list_id.append(user.id)
             attend_list_names.append('{}#{}'.format(user.name, user.discriminator))
+            await logchanbot(f"FREETIP msg ID {str(msg.id)}/{ctx.guild.name} - User {user.id}/{user.name}#{user.discriminator} joined freetip by `{ctx.author.name}` - Total: {str(len(attend_list_id))}")
+            # Add check if Bot didn't catch re-action
+            try:
+                reactions = msg.reactions
+                for reaction in reactions:
+                    if str(reaction.emoji) == EMOJI_PARTY:
+                        users = await reaction.users().flatten()
+                        for u in users:
+                            if u.id not in attend_list_id and u.id != ctx.author.id:
+                                await logchanbot(f"FREETIP msg ID {str(msg.id)}/{ctx.guild.name} - Add missing user ID {u.id}/{u.name}#{u.discriminator} to re-action freetip by {ctx.author.name}")
+                                attend_list_id.append(u.id)
+                                attend_list_names.append('{}#{}'.format(u.name, u.discriminator))
+            except Exception as e:
+                traceback.print_exc(file=sys.stdout)
+                await logchanbot(traceback.format_exc())
             embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
             if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
@@ -797,8 +812,8 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         numMsg = 0
         for each_id in attend_list_id:
             member = bot.get_user(id=each_id)
-            # TODO: set limit here 50
-            dm_user = bool(random.getrandbits(1)) if len(attend_list_id) > 50 else True
+            # TODO: set limit here 100
+            dm_user = bool(random.getrandbits(1)) if len(attend_list_id) > 100 else True
             if ctx.message.author.id != member.id and member.id != bot.user.id and str(member.id) not in notifyList:
                 try:
                     if dm_user:
@@ -979,6 +994,21 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         if str(reaction.emoji) == EMOJI_PARTY and user.id not in attend_list_id:
             attend_list_id.append(user.id)
             attend_list_names.append('{}#{}'.format(user.name, user.discriminator))
+            await logchanbot(f"GFREETIP msg ID {str(msg.id)}/{ctx.guild.name} - User {user.id}/{user.name}#{user.discriminator} joined gfreetip by `{ctx.author.name}` - Total: {str(len(attend_list_id))}")
+            # Add check if Bot didn't catch re-action
+            try:
+                reactions = msg.reactions
+                for reaction in reactions:
+                    if str(reaction.emoji) == EMOJI_PARTY:
+                        users = await reaction.users().flatten()
+                        for u in users:
+                            if u.id not in attend_list_id and u.id != ctx.author.id:
+                                await logchanbot(f"GFREETIP msg ID {str(msg.id)}/{ctx.guild.name} - Add missing user ID {u.id}/{u.name}#{u.discriminator} to re-action gfreetip by {ctx.author.name}")
+                                attend_list_id.append(u.id)
+                                attend_list_names.append('{}#{}'.format(u.name, u.discriminator))
+            except Exception as e:
+                traceback.print_exc(file=sys.stdout)
+                await logchanbot(traceback.format_exc())
             embed = discord.Embed(title=f"Guild free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
             if comment and len(comment) > 0:
                 embed.add_field(name="Comment", value=comment, inline=False)
@@ -986,7 +1016,9 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
                 if len(attend_list_id) < config.freetip.max_display_users:
                     embed.add_field(name=f"Attendees [{len(attend_list_id)}]", value=", ".join(attend_list_names), inline=False)
                 else:
-                    embed.add_field(name=f"Attendees [{len(attend_list_id)}]", value=", ".join(attend_list_names[:config.freetip.max_display_users]), inline=False)
+                    str_names = ",".join(attend_list_names)
+                    if len(str_names) <= 1000: str_names = str_names[:1000]
+                    embed.add_field(name=f"Attendees [{len(attend_list_id)}]", value=str_names, inline=False)
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
                 await logchanbot(traceback.format_exc())
@@ -1031,8 +1063,8 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         numMsg = 0
         for each_id in attend_list_id:
             member = bot.get_user(id=each_id)
-            # TODO: set limit here 50
-            dm_user = bool(random.getrandbits(1)) if len(attend_list_id) > 50 else True
+            # TODO: set limit here 100
+            dm_user = bool(random.getrandbits(1)) if len(attend_list_id) > 100 else True
             if ctx.message.author.id != member.id and member.id != bot.user.id and str(member.id) not in notifyList:
                 try:
                     if dm_user:
