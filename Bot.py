@@ -739,13 +739,13 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         embed.add_field(name="Comment", value=comment, inline=True)
     embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
 
-
     prev = []
     add_index = 0
-    while True:
-        start_time = int(time.time())
+    start_time = time.time()
+    time_left = duration_s
+    while time_left > 0:
         # Retrieve new reactions
-        _msg: discord.Message = ctx.fetch_message(msg.id)
+        _msg: discord.Message = await ctx.fetch_message(msg.id)
         for r in _msg.reactions:
             # Find reaction we're looking for
             if str(r.emoji) == EMOJI_PARTY:
@@ -753,12 +753,9 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                 attend_list = [i for i in await r.users().flatten() if not i.bot]
 
                 # Check if there's been a change, otherwise delay & recheck
-                if set(attend_list) == set(prev):
-                    await asyncio.sleep(0.2)
-                    duration_s -= int(time.time()) - start_time
-                    if duration_s <= 1:
-                        break
-                    continue
+                if set(attend_list) == set(prev) or len(attend_list) == 0:
+                    await asyncio.sleep(0.25)
+                    break
 
                 attend_list_names = " | ".join([u.mention for u in attend_list])
                 if len(attend_list_names) <= 1024:
@@ -779,9 +776,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                 await _msg.edit(embed=embed)
                 prev = attend_list
 
-        duration_s -= int(time.time()) - start_time
-        if duration_s <= 1:
-            break
+        time_left = duration_s - (time.time() - start_time)
 
     if len(attend_list) == 0:
         embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Already expired", timestamp=ts, color=0x00ff00)
