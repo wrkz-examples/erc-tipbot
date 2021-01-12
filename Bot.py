@@ -2642,6 +2642,27 @@ async def withdraw_error(ctx, error):
     return
 
 
+@freetip.error
+async def freetip_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Missing arguments. '
+                       f'You need to tell me **amount** and **duration** in seconds (with s).\nExample: {config.discord.prefixCmd}freetip **10 300s** or {config.discord.prefixCmd}freetip **10 300s Hello World**')
+    return
+
+
+@gfreetip.error
+async def gfreetip_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.message.add_reaction(EMOJI_ERROR)
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Missing arguments. '
+                       f'You need to tell me **amount** and **duration** in seconds (with s) [With comments].\n'
+                       f'Example: {config.discord.prefixCmd}gfreetip **10 300s** or {config.discord.prefixCmd}gfreetip **10 300s Hello World**\n')
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Looks like you don\'t have the permission.')
+    return
+
+
 @tip.error
 async def tip_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
