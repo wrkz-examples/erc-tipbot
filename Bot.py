@@ -766,14 +766,15 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                 else:
                     import textwrap
                     fields = textwrap.wrap(attend_list_names, width=1024)  # Wrap message before max len of field of 1024
-                    if len(fields) > len(_msg.embeds[0].fields):
-                        for _ in range(len(fields) - len(_msg.embeds[0].fields)):
+                    add_index = len(fields) - len(_msg.embeds[0].fields)
+                    if add_index > 0 :
+                        for _ in range(add_index):
                             embed.insert_field_at(0, name='TMP', value="TMP")
                     for i, l in enumerate(fields, start=0):
                         embed.set_field_at(i, name=f"Attendees (pt. {i+1})", value=l, inline=False)
 
-                embed.set_field_at(1, name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
-                embed.set_field_at(2, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+                embed.set_field_at(1+add_index, name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
+                embed.set_field_at(2+add_index, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
                 embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
                 await _msg.edit(embed=embed)
                 prev = attend_list
