@@ -728,6 +728,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
     if ctx.author.id not in TX_IN_PROCESS:
         TX_IN_PROCESS.append(ctx.author.id)
 
+
     embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
     embed.add_field(name="Attendees", value="", inline=False)
     embed.add_field(name="Individual Tip Amount", value=f"{num_format_coin(amount)}{TOKEN_NAME}", inline=True)
@@ -744,10 +745,12 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         # Retrieve new reactions
         try:
             _msg: discord.Message = await ctx.fetch_message(msg.id)
+
             for r in _msg.reactions:
                 # Find reaction we're looking for
                 if str(r.emoji) == EMOJI_PARTY:
                     # Get list of Users that reacted & filter bots out
+
                     attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
 
                     # Check if there's been a change, otherwise delay & recheck
@@ -775,6 +778,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                     prev = attend_list
 
             time_left = duration_s - (time.time() - start_time)
+
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             await logchanbot(traceback.format_exc())
@@ -790,7 +794,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         await msg.add_reaction(EMOJI_OK_BOX)
         return
 
-    attend_list_id = [u.id for u in attend_list]
+    attend_list_id = [u.id for u in attend_list if not u.bot and u != ctx.message.author]
 
     # re-check balance
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
