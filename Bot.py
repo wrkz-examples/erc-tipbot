@@ -772,7 +772,7 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
 
                 embed.set_field_at(1+add_index, name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
                 embed.set_field_at(2+add_index, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
-                embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
+                embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(int(time_left))}")
                 await _msg.edit(embed=embed)
                 prev = attend_list
 
