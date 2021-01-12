@@ -711,9 +711,8 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                        f'{TOKEN_NAME}.')
         return
 
-    attend_list_id = []
-    attend_list_names = []
-    ts = timestamp=datetime.utcnow()
+    attend_list = []
+    ts = datetime.utcnow()
     try:
         embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
         msg = await ctx.send(embed=embed)
@@ -732,51 +731,58 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
     if ctx.author.id not in TX_IN_PROCESS:
         TX_IN_PROCESS.append(ctx.author.id)
 
-    freetip_timer = False
+    embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+    embed.add_field(name="Attendees", value="", inline=False)
+    embed.add_field(name="Individual Tip Amount", value=f"{num_format_coin(amount)}{TOKEN_NAME}", inline=True)
+    embed.add_field(name="Num. Attendees", value="**0** members", inline=True)
+    if comment and len(comment) > 0:
+        embed.add_field(name="Comment", value=comment, inline=True)
+    embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
+
+
+    prev = []
     while True:
         start_time = int(time.time())
-        try:
-            reaction, user = await bot.wait_for('reaction_add', timeout=duration_s, check=check)
-        except asyncio.TimeoutError:
-            if len(attend_list_id) == 0:
-                embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Already expired", timestamp=ts, color=0x00ff00)
-                if comment and len(comment) > 0:
-                    embed.add_field(name="Comment", value=comment, inline=False)
-                embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
-                await msg.edit(embed=embed)
-                if ctx.author.id in TX_IN_PROCESS:
-                    TX_IN_PROCESS.remove(ctx.message.author.id)
-                await msg.add_reaction(EMOJI_OK_BOX)
-                return
+        # Retrieve new reactions
+        _msg: discord.Message = ctx.fetch_message(msg.id)
+        for r in _msg.reactions:
+            # Find reaction we're looking for
+            if str(r.emoji) == EMOJI_PARTY:
+                # Get list of Users that reacted & filter bots out
+                attend_list = [i for i in await r.users().flatten() if not i.bot]
+
+                # Check if there's been a change, otherwise delay & recheck
+                if set(attend_list) == set(prev):
+                    await asyncio.sleep(0.2)
+                    duration_s -= int(time.time()) - start_time
+                    if duration_s <= 1:
+                        break
+                    continue
+
+                attend_list_names = " | ".join([u.mention for u in attend_list])
+                embed.set_field_at(0, name='Attendees', value=attend_list_names, inline=False)
+                embed.set_field_at(1, name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
+                embed.set_field_at(2, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+                embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
+                await _msg.edit(embed=embed)
+                prev = attend_list
+
+        duration_s -= int(time.time()) - start_time
+        if duration_s <= 1:
             break
 
-        if str(reaction.emoji) == EMOJI_PARTY and user.id not in attend_list_id:
-            attend_list_id.append(user.id)
-            attend_list_names.append('{}#{}'.format(user.name, user.discriminator))
-            await logchanbot(f"FREETIP msg ID {str(msg.id)}/{ctx.guild.name} - User {user.id}/{user.name}#{user.discriminator} joined freetip by `{ctx.author.name}` - Total: {str(len(attend_list_id))}")
-            # Add check if Bot didn't catch re-action
-            try:
-                reactions = msg.reactions
-                for reaction in reactions:
-                    if str(reaction.emoji) == EMOJI_PARTY:
-                        users = await reaction.users().flatten()
-                        for u in users:
-                            if u.id not in attend_list_id and u.id != ctx.author.id:
-                                await logchanbot(f"FREETIP msg ID {str(msg.id)}/{ctx.guild.name} - Add missing user ID {u.id}/{u.name}#{u.discriminator} to re-action freetip by {ctx.author.name}")
-                                attend_list_id.append(u.id)
-                                attend_list_names.append('{}#{}'.format(u.name, u.discriminator))
-            except Exception as e:
-                traceback.print_exc(file=sys.stdout)
-                await logchanbot(traceback.format_exc())
-            embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
-            if comment and len(comment) > 0:
-                embed.add_field(name="Comment", value=comment, inline=False)
-            embed.add_field(name="Attendees", value=", ".join(attend_list_names), inline=False)
-            embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, timeout: {seconds_str(duration_s)}")
-            await msg.edit(embed=embed)
-            duration_s -= int(time.time()) - start_time
-            if duration_s <= 1:
-                break
+    if len(attend_list) == 0:
+        embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Already expired", timestamp=ts, color=0x00ff00)
+        if comment and len(comment) > 0:
+            embed.add_field(name="Comment", value=comment, inline=False)
+        embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, and no one collected!")
+        await msg.edit(embed=embed)
+        if ctx.author.id in TX_IN_PROCESS:
+            TX_IN_PROCESS.remove(ctx.message.author.id)
+        await msg.add_reaction(EMOJI_OK_BOX)
+        return
+
+    attend_list_id = [u.id for u in attend_list]
 
     # re-check balance
     userdata_balance = await store.sql_user_balance(str(ctx.message.author.id), TOKEN_NAME)
