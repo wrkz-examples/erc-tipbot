@@ -718,14 +718,16 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
 
     attend_list = []
     ts = datetime.utcnow()
+    embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+    add_index = 0
     try:
-        embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
+        if comment and len(comment) > 0:
+            add_index = 1
+            embed.add_field(name="Comment", value=comment, inline=True)
         embed.add_field(name="Individual Tip Amount", value=f"{num_format_coin(amount)}{TOKEN_NAME}", inline=True)
         embed.add_field(name="Num. Attendees", value="**0** members", inline=True)
-        if comment and len(comment) > 0:
-            embed.add_field(name="Comment", value=comment, inline=True)
         embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
-        msg = await ctx.send(embed=embed)
+        msg:discord.Message = await ctx.send(embed=embed)
         await msg.add_reaction(EMOJI_PARTY)
     except (discord.errors.NotFound, discord.errors.Forbidden) as e:
         await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
@@ -738,7 +740,6 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         TX_IN_PROCESS.append(ctx.author.id)
 
     prev = []
-    add_index = 0
     start_time = time.time()
     time_left = duration_s
     while time_left > 0:
@@ -758,15 +759,13 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
                         break
 
                     attend_list_names = " | ".join([str(u.name) + "#" + str(u.discriminator) for u in attend_list])
-                    embed = discord.Embed(title=f"Free tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"React {EMOJI_PARTY} to collect", timestamp=ts, color=0x00ff00)
-                    if comment and len(comment) > 0:
-                        embed.add_field(name="Comment", value=comment, inline=False)
-                    if len(attend_list_names) >= 1000: attend_list_names = attend_list_names[:1000]
+                    if len(attend_list_names) >= 1000:
+                        attend_list_names = attend_list_names[:1000]
                     try:
-                        if len(attend_list) > 0:
-                            embed.add_field(name='Attendees', value=attend_list_names, inline=False)
-                            embed.add_field(name='Individual Tip amount', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
-                            embed.add_field(name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+                        embed.set_field_at(index=add_index, name='Attendees', value=attend_list_names, inline=False)
+                        embed.set_field_at(index=1+add_index, name='Each Member Receives:', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}",
+                                           inline=True)
+                        embed.set_field_at(index=2+add_index, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
                     except Exception as e:
                         traceback.print_exc(file=sys.stdout)
                     embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(int(time_left))}")
@@ -778,6 +777,11 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             await logchanbot(traceback.format_exc())
+
+    try:
+        await msg.clear_reaction(EMOJI_PARTY)
+    except discord.Forbidden or discord.HTTPException:
+        pass
 
     if len(attend_list) == 0:
         embed = discord.Embed(title=f"Free Tip appears {num_format_coin(amount)}{TOKEN_NAME}", description=f"Already expired", timestamp=ts, color=0x00ff00)
