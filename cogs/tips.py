@@ -9,11 +9,11 @@ from random import random
 import discord
 from discord.ext import commands
 
-import config
 import store
 import utils
 from Bot import TOKEN_NAME, create_address_eth, num_format_coin, EMOJI_OK_HAND, EMOJI_OK_BOX, logchanbot, EMOJI_ZIPPED_MOUTH, EMOJI_ERROR, EMOJI_RED_NO, EMOJI_ARROW_RIGHTHOOK, \
     EMOJI_MONEYFACE, NOTIFICATION_OFF_CMD, EMOJI_SPEAK, EMOJI_BELL, EMOJI_BELL_SLASH, EMOJI_HOURGLASS_NOT_DONE, EMOJI_INFORMATION, EMOJI_PARTY, seconds_str
+from config import config
 
 
 class Tips(commands.Cog):

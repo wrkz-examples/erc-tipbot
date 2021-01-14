@@ -5,10 +5,10 @@ from datetime import datetime
 import discord
 from discord.ext import commands
 
-import config
 import store
 import utils
-from Bot import TOKEN_NAME, create_address_eth, num_format_coin, EMOJI_OK_HAND, EMOJI_OK_BOX, logchanbot, EMOJI_ZIPPED_MOUTH, EMOJI_ERROR, EMOJI_RED_NO, EMOJI_ARROW_RIGHTHOOK
+from Bot import TOKEN_NAME, num_format_coin, EMOJI_OK_HAND, EMOJI_OK_BOX, logchanbot, EMOJI_ZIPPED_MOUTH, EMOJI_ERROR, EMOJI_RED_NO, EMOJI_ARROW_RIGHTHOOK, create_address_eth
+from config import config
 
 
 class Wallet(commands.Cog):
