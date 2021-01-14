@@ -1,3 +1,4 @@
+import logging
 import traceback
 
 import discord
@@ -87,6 +88,8 @@ class Error(commands.Cog):
         await ctx.send("An unexpected error occurred while running that command.")
         await logchanbot("Ignoring exception in command {}:".format(ctx.command))
         await logchanbot("\n" + "".join(traceback.format_exception(type(error), error, error.__traceback__)))
+        logging.error("Ignoring exception in command {}:".format(ctx.command))
+        logging.error("\n" + "".join(traceback.format_exception(type(error), error, error.__traceback__)))
 
 
 def setup(client):
