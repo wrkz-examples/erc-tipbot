@@ -1,5 +1,6 @@
 import asyncio
 # Eth wallet py
+import datetime
 import functools
 import json
 import logging
@@ -137,6 +138,7 @@ async def on_ready():
     print(bot.user.name)
     print(bot.user.id)
     print('------')
+    bot.start_time = datetime.datetime.now()
     game = discord.Game(name="m.")
     await bot.change_presence(status=discord.Status.online, activity=game)
 

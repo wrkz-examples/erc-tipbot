@@ -79,7 +79,7 @@ class Core(commands.Cog):
                        value="This bot was built to enable convenient tipping of MOONS within discord!", inline=False, )
         page.add_field(name="Getting Started",
                        value=f"For a full list of commands, see `{ctx.prefix}help`. Browse through the various commands to get comfortable with using "
-                             f"them, and do `{ctx.prefix}help <command> for more info on specific commands!", inline=False, )
+                             f"them, and do `{ctx.prefix}help <command>` for more info on specific commands!", inline=False, )
         page.set_thumbnail(url=self.bot.user.avatar_url)
         page.set_footer(text="Use the reactions to flip pages.")
         all_pages.append(page)
