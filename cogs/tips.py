@@ -4,7 +4,7 @@ import sys
 import time
 import traceback
 from datetime import datetime
-from random import random
+import random
 
 import discord
 from discord.ext import commands
