@@ -292,7 +292,7 @@ class Tips(commands.Cog):
             return
 
         try:
-            duration_s = (duration - datetime.utcnow()).total_seconds()
+            duration_s = int((duration - datetime.utcnow()).total_seconds())
         except Exception as e:
             await ctx.message.add_reaction(EMOJI_ERROR)
             await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid duration.')
@@ -558,9 +558,8 @@ class Tips(commands.Cog):
             await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid amount.')
             return
 
-        duration_s = 0
         try:
-            duration_s = (duration - datetime.utcnow()).total_seconds()
+            duration_s = int((duration - datetime.utcnow()).total_seconds())
         except Exception as e:
             await ctx.message.add_reaction(EMOJI_ERROR)
             await ctx.send(f'{EMOJI_RED_NO} {ctx.author.mention} Invalid duration.')
