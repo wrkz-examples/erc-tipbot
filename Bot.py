@@ -724,18 +724,17 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         if comment and len(comment) > 0:
             add_index = 1
             embed.add_field(name="Comment", value=comment, inline=True)
-        embed.add_field(name="Attendees", value="*", inline=True)
+        embed.add_field(name="Attendees", value="React below to join!", inline=False)
         embed.add_field(name="Individual Tip Amount", value=f"{num_format_coin(amount)}{TOKEN_NAME}", inline=True)
         embed.add_field(name="Num. Attendees", value="**0** members", inline=True)
         embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(duration_s)}")
-        msg:discord.Message = await ctx.send(embed=embed)
+        msg: discord.Message = await ctx.send(embed=embed)
         await msg.add_reaction(EMOJI_PARTY)
     except (discord.errors.NotFound, discord.errors.Forbidden) as e:
-        await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
-        return
+        return await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
-        await logchanbot(traceback.format_exc())
+        return await logchanbot(traceback.format_exc())
             
     if ctx.author.id not in TX_IN_PROCESS:
         TX_IN_PROCESS.append(ctx.author.id)
@@ -748,35 +747,37 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
         try:
             _msg: discord.Message = await ctx.fetch_message(msg.id)
 
-            for r in _msg.reactions:
-                # Find reaction we're looking for
-                if str(r.emoji) == EMOJI_PARTY:
-                    # Get list of Users that reacted & filter bots out
-                    attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
+            # Find reaction we're looking for
+            r = discord.utils.get(_msg.reactions, emoji=EMOJI_PARTY)
+            if r:
+                # Get list of Users that reacted & filter bots out
+                attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
 
-                    # Check if there's been a change, otherwise delay & recheck
-                    if set(attend_list) == set(prev) or len(attend_list) == 0:
-                        time_left = duration_s - (time.time() - start_time)
-                        if int(time_left) % 3 == 0:
-                            if time_left <= 0: time_left = 0
-                            embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(int(time_left))}")
-                            await _msg.edit(embed=embed)
-                        await asyncio.sleep(0.25)
+                # Check if there's been a change, otherwise delay & recheck
+                if set(attend_list) == set(prev) or len(attend_list) == 0:
+                    time_left = duration_s - (time.time() - start_time)
+                    if int(time_left) % 3 == 0: # Update embed every 3s with current time left
+                        time_left = 0 if time_left <= 0 else time_left
+                        embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(int(time_left))}")
+                        await _msg.edit(embed=embed)
+                    if time_left <= 0:
                         break
+                    await asyncio.sleep(1)
+                    continue
 
-                    attend_list_names = " | ".join([str(u.name) + "#" + str(u.discriminator) for u in attend_list])
-                    if len(attend_list_names) >= 1000:
-                        attend_list_names = attend_list_names[:1000]
-                    try:
-                        embed.set_field_at(index=add_index, name='Attendees', value=attend_list_names, inline=False)
-                        embed.set_field_at(index=1+add_index, name='Each Member Receives:', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}",
-                                           inline=True)
-                        embed.set_field_at(index=2+add_index, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
-                    except Exception as e:
-                        traceback.print_exc(file=sys.stdout)
-                    embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(int(time_left))}")
-                    await _msg.edit(embed=embed)
-                    prev = attend_list
+                attend_list_names = " | ".join([str(u.name) + "#" + str(u.discriminator) for u in attend_list])
+                if len(attend_list_names) >= 1000:
+                    attend_list_names = attend_list_names[:1000]
+                try:
+                    embed.set_field_at(index=add_index, name='Attendees', value=attend_list_names, inline=False)
+                    embed.set_field_at(index=1+add_index, name='Each Member Receives:', value=f"{num_format_coin(round(amount / len(attend_list), 4))}{TOKEN_NAME}", inline=True)
+                    embed.set_field_at(index=2+add_index, name="Num. Attendees", value=f"**{len(attend_list)}** members", inline=True)
+                except Exception as e:
+                    traceback.print_exc(file=sys.stdout)
+
+                embed.set_footer(text=f"Free tip by {ctx.message.author.name}#{ctx.message.author.discriminator}, Time Left: {seconds_str(int(time_left))}")
+                await msg.edit(embed=embed)
+                prev = attend_list
 
             time_left = duration_s - (time.time() - start_time)
 
@@ -786,12 +787,13 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
 
     try:
         _msg: discord.Message = await ctx.fetch_message(msg.id)
-        for r in _msg.reactions:
-            if str(r.emoji) == EMOJI_PARTY:
-                # Get list of Users that reacted & filter bots out
-                tmp_attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
-                if len(tmp_attend_list) > len(attend_list):
-                    attend_list = tmp_attend_list
+        # Find reaction we're looking for
+        r = discord.utils.get(_msg.reactions, emoji=EMOJI_PARTY)
+        if r:
+            # Get list of Users that reacted & filter bots out
+            tmp_attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
+            if len(tmp_attend_list) > len(attend_list):
+                attend_list = tmp_attend_list
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
         await logchanbot(traceback.format_exc())
