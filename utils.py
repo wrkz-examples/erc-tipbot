@@ -12,7 +12,6 @@ from discord.ext.commands import BadArgument, Converter
 
 class MemberLookupConverter(discord.ext.commands.MemberConverter):
     async def convert(self, ctx, mem, guild: discord.Guild = None) -> discord.Member:
-        in_db = False
         if not ctx.guild:
             ctx.guild = guild
 
@@ -145,7 +144,8 @@ class EmbedPaginator:
         try:
             if self.pages:
                 await msg.edit(embed=self.pages[0])
-            await msg.clear_reactions()
+            if msg.guild:
+                await msg.clear_reactions()
         except discord.NotFound:
             pass
 
