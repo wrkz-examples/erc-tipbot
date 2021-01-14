@@ -140,11 +140,12 @@ class EmbedPaginator:
                     embed.title = f" (Page {pagenum + 1}/{len(self.pages)})"
                 await msg.edit(embed=self.pages[pagenum])
 
+
     async def end_pagination(self, msg):
         try:
             if self.pages:
                 await msg.edit(embed=self.pages[0])
-            if msg.guild:
+            if not isinstance(msg.channel, discord.DMChannel):
                 await msg.clear_reactions()
         except discord.NotFound:
             pass
