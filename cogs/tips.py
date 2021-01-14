@@ -535,7 +535,7 @@ class Tips(commands.Cog):
             await ctx.message.add_reaction(EMOJI_ERROR)
         return
 
-    @commands.command(usage='gfreetip <amount> <duration> [comment]', aliases=['mfreetip', 'guildfreetip'], help="Spread guild free tip by reacting with emoji")
+    @commands.command(usage='gfreetip <amount> <duration> [comment]', aliases=['mfreetip', 'guildfreetip'], description="Spread guild free tip by reacting with emoji")
     @commands.has_permissions(manage_channels=True)
     async def gfreetip(self, ctx, amount: str, duration: utils.Duration, *, comment: str = None):
 
