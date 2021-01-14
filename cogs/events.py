@@ -40,9 +40,6 @@ class Events(commands.Cog):
         if isinstance(message.channel, discord.DMChannel) == False and message.author.bot == False and len(message.content) > 0 and message.author != self.bot.user:
             await Bot.add_msg_redis(json.dumps([str(message.guild.id), message.guild.name, str(message.channel.id), message.channel.name,
                                                 str(message.author.id), message.author.name, str(message.id), message.content, int(time.time())]), False)
-        # Do not remove this, otherwise, command not working.
-        ctx = await self.bot.get_context(message)
-        await self.bot.invoke(ctx)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
