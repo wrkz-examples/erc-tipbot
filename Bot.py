@@ -785,6 +785,18 @@ async def freetip(ctx, amount: str, duration: str, *, comment: str=None):
             await logchanbot(traceback.format_exc())
 
     try:
+        _msg: discord.Message = await ctx.fetch_message(msg.id)
+        for r in _msg.reactions:
+            if str(r.emoji) == EMOJI_PARTY:
+                # Get list of Users that reacted & filter bots out
+                tmp_attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
+                if len(tmp_attend_list) > len(attend_list):
+                    attend_list = tmp_attend_list
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
+
+    try:
         await msg.clear_reaction(EMOJI_PARTY)
     except discord.Forbidden or discord.HTTPException:
         pass
@@ -1054,6 +1066,18 @@ async def gfreetip(ctx, amount: str, duration: str, *, comment: str=None):
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             await logchanbot(traceback.format_exc())
+
+    try:
+        _msg: discord.Message = await ctx.fetch_message(msg.id)
+        for r in _msg.reactions:
+            if str(r.emoji) == EMOJI_PARTY:
+                # Get list of Users that reacted & filter bots out
+                tmp_attend_list = [i for i in await r.users().flatten() if not i.bot and i != ctx.message.author]
+                if len(tmp_attend_list) > len(attend_list):
+                    attend_list = tmp_attend_list
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
 
     try:
         await msg.clear_reaction(EMOJI_PARTY)
