@@ -22,6 +22,9 @@ class Core(commands.Cog):
 
     @commands.command(usage="rolecount [role]", description="Counts the number of people who have a role, If no role is specified it counts everyone.")
     async def rolecount(self, ctx, *, role: discord.Role = None):
+        if isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send('This command can not be in private.')
+            return
         if not role:
             name = " the server"
             nmembers = ctx.guild.member_count
