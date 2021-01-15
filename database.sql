@@ -13,6 +13,40 @@ CREATE TABLE `bot_tipnotify_user` (
 
 SET NAMES utf8mb4;
 
+DROP TABLE IF EXISTS `discord_messages`;
+CREATE TABLE `discord_messages` (
+  `serverid` varchar(32) CHARACTER SET ascii NOT NULL,
+  `server_name` varchar(64) NOT NULL,
+  `channel_id` varchar(32) CHARACTER SET ascii NOT NULL,
+  `channel_name` varchar(64) NOT NULL,
+  `user_id` varchar(32) CHARACTER SET ascii NOT NULL,
+  `message_author` varchar(64) NOT NULL,
+  `message_id` varchar(32) CHARACTER SET ascii NOT NULL,
+  `message_content` varchar(2048) NOT NULL,
+  `message_time` int(11) NOT NULL,
+  UNIQUE KEY `message_id` (`message_id`),
+  KEY `message_time` (`message_time`),
+  KEY `serverid` (`serverid`),
+  KEY `channel_id` (`channel_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4;
+
+
+DROP TABLE IF EXISTS `discord_server`;
+CREATE TABLE `discord_server` (
+  `serverid` varchar(32) NOT NULL,
+  `servername` varchar(64) NOT NULL DEFAULT 'NONE',
+  `prefix` varchar(6) NOT NULL,
+  `numb_user` int(11) NOT NULL DEFAULT 0,
+  `numb_bot` int(11) NOT NULL DEFAULT 0,
+  `numb_channel` int(11) NOT NULL DEFAULT 0,
+  `numb_online` int(11) NOT NULL DEFAULT 0,
+  `botchan` varchar(32) DEFAULT NULL,
+  `status` enum('IN','REMOVED','REJOINED') NOT NULL DEFAULT 'IN',
+  `lastUpdate` int(11) DEFAULT NULL,
+  UNIQUE KEY `serverid` (`serverid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
 DROP TABLE IF EXISTS `erc_contract`;
 CREATE TABLE `erc_contract` (
   `http_address` varchar(128) NOT NULL,
