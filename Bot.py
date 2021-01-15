@@ -113,6 +113,7 @@ bot = AutoShardedBot(command_prefix=get_prefix, owner_id=config.discord.ownerID,
 bot.remove_command('help')
 bot.owner_id = config.discord.ownerID
 bot.TX_IN_PROCESS = []
+bot.players_in_game = []
 
 
 # Create ETH
