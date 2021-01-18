@@ -472,7 +472,7 @@ class Tips(commands.Cog):
         tips = None
 
         try:
-            tips = await store.sql_mv_erc_multiple(str(ctx.message.author.id), attend_list_id, amountDiv, TOKEN_NAME, "TIPALL", token_info['contract'])
+            tips = await store.sql_mv_erc_multiple(str(ctx.message.author.id), attend_list_id, amountDiv, TOKEN_NAME, "FREETIP", token_info['contract'])
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             await logchanbot(traceback.format_exc())
@@ -738,7 +738,7 @@ class Tips(commands.Cog):
         tips = None
 
         try:
-            tips = await store.sql_mv_erc_multiple(str(ctx.guild.id), attend_list_id, amountDiv, TOKEN_NAME, "TIPALL", token_info['contract'])
+            tips = await store.sql_mv_erc_multiple(str(ctx.guild.id), attend_list_id, amountDiv, TOKEN_NAME, "FREETIP", token_info['contract'])
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             await logchanbot(traceback.format_exc())

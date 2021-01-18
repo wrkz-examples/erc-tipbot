@@ -298,7 +298,7 @@ async def sql_mv_erc_multiple(user_from: str, user_tos, amount_each: float, coin
     token_info = await get_token_info(TOKEN_NAME)
     token_decimal = token_info['token_decimal']
     TOKEN_NAME = coin.upper()
-    if tiptype.upper() not in ["TIPS", "TIPALL", "FREETIP", "FREETIPS"]:
+    if tiptype.upper() not in ["TIPS", "TIPALL", "FREETIP"]:
         return False
     values_str = []
     currentTs = int(time.time())
