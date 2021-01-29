@@ -413,7 +413,7 @@ class Tips(commands.Cog):
                     prev = attend_list
 
                 time_left = duration_s - (time.time() - start_time)
-
+                await asyncio.sleep(1)
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
                 await logchanbot(traceback.format_exc())
@@ -678,7 +678,7 @@ class Tips(commands.Cog):
                     prev = attend_list
 
                 time_left = duration_s - (time.time() - start_time)
-
+                await asyncio.sleep(1)
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
                 await logchanbot(traceback.format_exc())
