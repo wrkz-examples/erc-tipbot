@@ -7,6 +7,8 @@ from discord.ext import commands
 
 import Bot
 import store
+from Bot import TOKEN_NAME, num_format_coin, EMOJI_ERROR, EMOJI_OK_HAND, logchanbot
+from config import config
 
 
 class Admin(commands.Cog):
@@ -89,9 +91,65 @@ class Admin(commands.Cog):
             except Exception as e:
                 print(traceback.format_exc())
         else:
-            await ctx.message.add_reaction(Bot.EMOJI_ERROR)
+            await ctx.message.add_reaction(EMOJI_ERROR)
             await ctx.send(f'{ctx.author.mention} I can not find channel **{talk_channel}**.')
             return
+
+
+    @commands.command(usage='baluser <userid>', description='Get a balance of a user')
+    async def baluser(self, ctx, userid: str):
+        if str(ctx.author.id) not in [str(each) for each in Bot.MOD_LIST]:
+            return
+
+        try:
+            wallet = await store.sql_get_userwallet(userid, TOKEN_NAME, 'DISCORD')
+            if wallet is None:
+                try:
+                    msg = await ctx.send(f'{Bot.EMOJI_INFORMATION} {ctx.author.mention}, userid `{userid}` has no wallet.')
+                    await msg.add_reaction(Bot.EMOJI_OK_BOX)
+                except (discord.errors.NotFound, discord.errors.Forbidden) as e:
+                    await msg.add_reaction(EMOJI_ERROR)
+                    await Bot.logchanbot(traceback.format_exc())
+                return
+            else:
+                embed = discord.Embed(title=f'Balance for userid: {userid}', description='`<Spendable> is for withdraw/tip.`',
+                                      timestamp=datetime.utcnow(), colour=7047495)
+                embed.set_author(name=ctx.message.author.name, icon_url=ctx.message.author.avatar_url)
+                deposit_balance = await store.http_wallet_getbalance(wallet['balance_wallet_address'], TOKEN_NAME)
+
+                token_info = await store.get_token_info(TOKEN_NAME)
+                real_deposit_balance = round(deposit_balance / 10 ** token_info['token_decimal'], 6)
+
+                embed.add_field(name="Deposited", value="`{}{}`".format(num_format_coin(real_deposit_balance), TOKEN_NAME), inline=True)
+                try:
+                    userdata_balance = await store.sql_user_balance(userid, TOKEN_NAME, 'DISCORD')
+                    balance_actual = num_format_coin(wallet['real_actual_balance'] + userdata_balance['Adjust'])
+                    embed.add_field(name="Spendable", value="`{}{}`".format(balance_actual, TOKEN_NAME), inline=True)
+                    total_balance = real_deposit_balance + wallet['real_actual_balance'] + userdata_balance['Adjust']
+                    embed.add_field(name="Total", value="`{}{}`".format(num_format_coin(total_balance), TOKEN_NAME), inline=False)
+                    embed.set_footer(text=f"Minimum {str(config.moon.min_move_deposit)}{config.moon.ticker} in deposit is required to (auto)transfer to **Spendable**.")
+                    try:
+                        # Try DM first, if failed, send to public
+                        msg = await ctx.author.send(embed=embed)
+                        await ctx.message.add_reaction(EMOJI_OK_HAND)
+                    except (discord.Forbidden, discord.errors.Forbidden) as e:
+                        traceback.print_exc(file=sys.stdout)
+                        try:
+                            msg = await ctx.send(embed=embed)
+                            await msg.add_reaction(EMOJI_OK_BOX)
+                            await ctx.message.add_reaction(EMOJI_OK_HAND)
+                        except (discord.Forbidden, discord.errors.Forbidden) as e:
+                            traceback.print_exc(file=sys.stdout)
+                            await logchanbot(traceback.format_exc())
+                            await ctx.message.add_reaction(EMOJI_ZIPPED_MOUTH)
+                    return
+                except Exception as e:
+                    await ctx.message.add_reaction(EMOJI_ERROR)
+                    traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
+        except Exception as e:
+            print(traceback.format_exc())
+
 
     @commands.command(usage='prefix', description='Get current prefix')
     async def prefix(self, ctx):
@@ -100,7 +158,7 @@ class Admin(commands.Cog):
             msg = await ctx.send(f'{Bot.EMOJI_INFORMATION} {ctx.author.mention}, the prefix here is **{prefix}**')
             await msg.add_reaction(Bot.EMOJI_OK_BOX)
         except (discord.errors.NotFound, discord.errors.Forbidden) as e:
-            await msg.add_reaction(Bot.EMOJI_ERROR)
+            await msg.add_reaction(EMOJI_ERROR)
             await Bot.logchanbot(traceback.format_exc())
         return
 
