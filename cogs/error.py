@@ -19,38 +19,31 @@ class Error(commands.Cog):
 
         error = getattr(error, "original", error)  # get original error
 
-        if isinstance(error, commands.CommandNotFound):
-            await ctx.message.delete()
-            return await ctx.send(f"That command does not exist. Please use `{ctx.prefix}commands` for "
-                                  f"a list of commands, or `{ctx.prefix}help` for more information.")
-
         if isinstance(error, commands.NoPrivateMessage):
-            await ctx.send('This command cannot be used in private messages.')
+            await ctx.send(f'{ctx.author.mention} This command cannot be used in private messages.')
 
         elif isinstance(error, commands.DisabledCommand):
-            await ctx.send('Sorry. This command is disabled and cannot be used.')
+            await ctx.send(f'{ctx.author.mention} Sorry. This command is disabled and cannot be used.')
 
         if isinstance(error, commands.MissingPermissions):
-            await ctx.message.delete()
             return await ctx.send(f'{ctx.author.mention} Does not have the perms to use this: `{ctx.command.name}` command.')
 
         if isinstance(error, commands.MissingRole):
-            await ctx.message.delete()
             return await ctx.send(f'{ctx.author.mention}: ' + str(error))
 
         if isinstance(error, commands.NoPrivateMessage):
-            return await ctx.send("This command cannot be used in a DM.")
+            return await ctx.send(f"{ctx.author.mention} This command cannot be used in a DM.")
 
         if isinstance(error, commands.CheckFailure) or isinstance(error, commands.CheckAnyFailure):
             if not self.client.maintenance_mode:
-                await ctx.send(f"You do not have permission to use this command (`{ctx.prefix}{ctx.command.name}`).")  # \nCheck(s) failed: {failed}")
-            return await ctx.message.delete()
+                await ctx.send(f"{ctx.author.mention} You do not have permission to use this command (`{ctx.prefix}{ctx.command.name}`).")  # \nCheck(s) failed: {failed}")
+            return
 
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.send(
                 f"To prevent overload, this command is on cooldown for: ***{round(error.retry_after)}*** more seconds. Retry the command then.",
                 delete_after=5)
-            return await ctx.message.delete()
+            return
 
         if isinstance(error, commands.MaxConcurrencyReached):
             return await ctx.send(f"The maximum number of concurrent usages of this command has been reached ({error.number}/{error.number})! Please wait until the previous "
