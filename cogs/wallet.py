@@ -42,6 +42,14 @@ class Wallet(commands.Cog):
                 embed.add_field(name="Spendable", value="`{}{}`".format(balance_actual, TOKEN_NAME), inline=True)
                 total_balance = real_deposit_balance + wallet['real_actual_balance'] + userdata_balance['Adjust']
                 embed.add_field(name="Total", value="`{}{}`".format(num_format_coin(total_balance), TOKEN_NAME), inline=False)
+                try:
+                    local_height = await store.sql_get_block_number()
+                    api_height = await store.sql_get_api_block_number()
+                    if local_height and api_height:
+                        embed.add_field(name="blockNumber Local/API", value="`{:,.0f}/{:,.0f}`".format(local_height, api_height), inline=False)
+                except Exception as e:
+                    traceback.print_exc(file=sys.stdout)
+                    await logchanbot(traceback.format_exc())
                 embed.set_footer(text=f"Minimum {str(config.moon.min_move_deposit)}{config.moon.ticker} in deposit is required to (auto)transfer to **Spendable**.")
                 try:
                     # Try DM first, if failed, send to public

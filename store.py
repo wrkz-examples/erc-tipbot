@@ -12,14 +12,35 @@ from web3 import Web3
 from web3.middleware import geth_poa_middleware
 from ethtoken.abi import EIP20_ABI
 
+# redis
+import redis
+
 # For seed to key
 from eth_account import Account
 Account.enable_unaudited_hdwallet_features()
 
 TOKEN_NAME = config.moon.ticker.upper()
 
+redis_pool = None
+redis_conn = None
+redis_expired = 10
 pool = None
 sys.path.append("..")
+
+
+def init():
+    global redis_pool
+    print("PID %d: initializing redis pool..." % os.getpid())
+    redis_pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True, db=8)
+
+def openRedis():
+    global redis_pool, redis_conn
+    if redis_conn is None:
+        try:
+            redis_conn = redis.Redis(connection_pool=redis_pool)
+        except Exception as e:
+            traceback.print_exc(file=sys.stdout)
+
 
 async def openConnection():
     global pool
@@ -559,6 +580,48 @@ async def sql_get_block_number():
                     decoded_data = json.loads(res_data)
                     if decoded_data and 'result' in decoded_data:
                         return int(decoded_data['result'], 16)
+    except asyncio.TimeoutError:
+        print('TIMEOUT: get block number {}s'.format(timeout))
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
+    return None
+
+
+async def sql_get_api_block_number():
+    global redis_pool, redis_conn, redis_expired
+    key = "ERC-TIPBOT:RINKEBY:HEIGHT"
+    timeout = redis_expired
+    try:
+        if redis_conn is None: redis_conn = redis.Redis(connection_pool=redis_pool)
+        if redis_conn and redis_conn.exists(key):
+            height = redis_conn.get(key).decode()
+            return int(height)
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        await logchanbot(traceback.format_exc())
+    url = 'https://api-rinkeby.etherscan.io/api?module=proxy&action=eth_blockNumber'
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers={'Content-Type': 'application/json'}, timeout=timeout) as response:
+                if response.status == 200:
+                    res_data = await response.read()
+                    res_data = res_data.decode('utf-8')
+                    await session.close()
+                    decoded_data = json.loads(res_data)
+                    if decoded_data and 'result' in decoded_data:
+                        height = int(decoded_data['result'], 16)
+                        # store in redis
+                        try:
+                            openRedis()
+                            if redis_conn is None:
+                                redis_conn = redis.Redis(connection_pool=redis_pool)
+                                redis_conn.set(key, str(height), ex=redis_expired)
+                            else:
+                                redis_conn.set(key, str(height), ex=redis_expired)
+                        except Exception as e:
+                            await logchanbot(traceback.format_exc())
+                        return height
     except asyncio.TimeoutError:
         print('TIMEOUT: get block number {}s'.format(timeout))
     except Exception as e:
